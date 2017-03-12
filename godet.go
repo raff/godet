@@ -4,10 +4,18 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 
 	"github.com/gobs/httpclient"
 	"golang.org/x/net/websocket"
 )
+
+func decode(resp *httpclient.HttpResponse, v interface{}) error {
+	err := json.NewDecoder(resp.Body).Decode(v)
+	resp.Close()
+
+	return err
+}
 
 //
 // DevTools version info
@@ -67,25 +75,73 @@ func (t Tab) String() string {
 // RemoteDebugger
 //
 type RemoteDebugger struct {
-	http *httpclient.HttpClient
-	ws   *websocket.Conn
+	http  *httpclient.HttpClient
+	ws    *websocket.Conn
+	reqid int
 }
 
 //
 // Connect to the remote debugger and return `RemoteDebugger` object
 //
 func Connect(port string) (*RemoteDebugger, error) {
-	remote := &RemoteDebugger{}
+	remote := &RemoteDebugger{
+		http: httpclient.NewHttpClient("http://" + port),
+	}
 
-	remote.http = httpclient.NewHttpClient("http://" + port)
-
-	if tablist, err := remote.TabList(""); err != nil {
+	// check http connection
+	tabs, err := remote.TabList("")
+	if err != nil {
 		return nil, err
-	} else if remote.ws, err = websocket.Dial(tablist[0].WsUrl, "", "http://localhost"); err != nil {
+	}
+
+	var wsUrl string
+
+	for _, tab := range tabs {
+		if tab.WsUrl != "" {
+			wsUrl = tab.WsUrl
+			break
+		}
+	}
+
+	// check websocket connection
+	if remote.ws, err = websocket.Dial(wsUrl, "", "http://localhost"); err != nil {
 		return nil, err
 	}
 
 	return remote, nil
+}
+
+func (remote *RemoteDebugger) sendRequest(cmd string, params map[string]interface{}) ([]byte, error) {
+	command := map[string]interface{}{
+		"id":     remote.reqid,
+		"method": cmd,
+		"params": params,
+	}
+
+	bytes, err := json.Marshal(command)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = remote.ws.Write(bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	buf := make([]byte, 4096)
+	bytes = bytes[:0]
+
+	for {
+		if n, err := remote.ws.Read(buf); err != nil {
+			return nil, err
+		} else {
+			bytes = append(bytes, buf[:n]...)
+
+			if n < len(buf) {
+				return bytes, nil
+			}
+		}
+	}
 }
 
 //
@@ -99,11 +155,11 @@ func (remote *RemoteDebugger) Version() (*Version, error) {
 
 	var version Version
 
-	dec := json.NewDecoder(resp.Body)
-	err = dec.Decode(&version)
+	if err = decode(resp, &version); err != nil {
+		return nil, err
+	}
 
-	resp.Close()
-	return &version, err
+	return &version, nil
 }
 
 //
@@ -117,24 +173,19 @@ func (remote *RemoteDebugger) TabList(filter string) ([]*Tab, error) {
 		return nil, err
 	}
 
-	var tablist []*Tab
+	var tabs []*Tab
 
-	dec := json.NewDecoder(resp.Body)
-	err = dec.Decode(&tablist)
-
-	resp.Close()
-
-	if err != nil {
+	if err = decode(resp, &tabs); err != nil {
 		return nil, err
 	}
 
 	if filter == "" {
-		return tablist, nil
+		return tabs, nil
 	}
 
 	var filtered []*Tab
 
-	for _, t := range tablist {
+	for _, t := range tabs {
 		if t.Type == filter {
 			filtered = append(filtered, t)
 		}
@@ -152,16 +203,53 @@ func (remote *RemoteDebugger) Close(tab *Tab) error {
 	return err
 }
 
+//
+// Create a new tab
+//
+func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
+	params := map[string]interface{}{}
+	if url != "" {
+		params["url"] = url
+	}
+	resp, err := remote.http.Get("/json/new", params, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var tab Tab
+	if err = decode(resp, &tab); err != nil {
+		return nil, err
+	}
+
+	return &tab, nil
+}
+
+func (remote *RemoteDebugger) getDomains() error {
+	res, err := remote.sendRequest("Schema.getDomains", nil)
+	if res != nil {
+		fmt.Println(string(res))
+	}
+
+	return err
+}
+
 func main() {
 	port := flag.String("port", "localhost:9222", "Chrome remote debugger port")
+	filter := flag.String("filter", "page", "filter tab list")
 	flag.Parse()
 
-	remote, _ := Connect(*port)
+	remote, err := Connect(*port)
+	if err != nil {
+		log.Fatal("connect", err)
+	}
 
 	fmt.Println()
 	fmt.Println("Version:")
 	fmt.Println(remote.Version())
 
 	fmt.Println()
-	fmt.Println(remote.TabList("page"))
+	fmt.Println(remote.TabList(*filter))
+
+	fmt.Println()
+	remote.getDomains()
 }

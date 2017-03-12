@@ -111,17 +111,28 @@ func Connect(port string) (*RemoteDebugger, error) {
 	return remote, nil
 }
 
-func (remote *RemoteDebugger) sendRequest(cmd string, params map[string]interface{}) ([]byte, error) {
+type wsResult struct {
+	Id     int             `json:"id"`
+	Result json.RawMessage `json:"result"`
+}
+
+type wsParams map[string]interface{}
+
+func (remote *RemoteDebugger) sendRequest(cmd string, params wsParams) (*wsResult, error) {
 	command := map[string]interface{}{
 		"id":     remote.reqid,
 		"method": cmd,
 		"params": params,
 	}
 
+	remote.reqid++
+
 	bytes, err := json.Marshal(command)
 	if err != nil {
 		return nil, err
 	}
+
+	log.Println("send", string(bytes))
 
 	_, err = remote.ws.Write(bytes)
 	if err != nil {
@@ -138,10 +149,19 @@ func (remote *RemoteDebugger) sendRequest(cmd string, params map[string]interfac
 			bytes = append(bytes, buf[:n]...)
 
 			if n < len(buf) {
-				return bytes, nil
+				break
 			}
 		}
 	}
+
+	var res wsResult
+
+	err = json.Unmarshal(bytes, &res)
+	if err != nil {
+		return nil, err
+	}
+
+	return &res, nil
 }
 
 //
@@ -195,6 +215,15 @@ func (remote *RemoteDebugger) TabList(filter string) ([]*Tab, error) {
 }
 
 //
+// Activate specified tab
+//
+func (remote *RemoteDebugger) Activate(tab *Tab) error {
+	resp, err := remote.http.Get("/json/activate/"+tab.Id, nil, nil)
+	resp.Close()
+	return err
+}
+
+//
 // Close specified tab
 //
 func (remote *RemoteDebugger) Close(tab *Tab) error {
@@ -227,7 +256,19 @@ func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
 func (remote *RemoteDebugger) getDomains() error {
 	res, err := remote.sendRequest("Schema.getDomains", nil)
 	if res != nil {
-		fmt.Println(string(res))
+		fmt.Println(res.Id, string(res.Result))
+	}
+
+	return err
+}
+
+func (remote *RemoteDebugger) Navigate(url string) error {
+	res, err := remote.sendRequest("Page.navigate", wsParams{
+		"url": url,
+	})
+
+	if res != nil {
+		fmt.Println(res.Id, string(res.Result))
 	}
 
 	return err
@@ -248,8 +289,21 @@ func main() {
 	fmt.Println(remote.Version())
 
 	fmt.Println()
-	fmt.Println(remote.TabList(*filter))
+	tabs, err := remote.TabList(*filter)
+	if err != nil {
+		log.Fatal("cannot get list of tabs: ", err)
+	}
+
+	fmt.Println(tabs)
 
 	fmt.Println()
-	remote.getDomains()
+	fmt.Println(remote.getDomains())
+
+	l := len(tabs)
+	if l > 0 {
+		remote.Activate(tabs[l-1])
+
+		fmt.Println()
+		fmt.Println(remote.Navigate("http://httpbin.org/"))
+	}
 }

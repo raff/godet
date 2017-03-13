@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/gobs/args"
@@ -83,6 +84,9 @@ type RemoteDebugger struct {
 	ws     *websocket.Conn
 	reqid  int
 	closed bool
+
+	responses map[int]chan json.RawMessage
+	r_lock    sync.Mutex
 }
 
 //
@@ -90,7 +94,8 @@ type RemoteDebugger struct {
 //
 func Connect(port string) (*RemoteDebugger, error) {
 	remote := &RemoteDebugger{
-		http: httpclient.NewHttpClient("http://" + port),
+		http:      httpclient.NewHttpClient("http://" + port),
+		responses: map[int]chan json.RawMessage{},
 	}
 
 	// check http connection
@@ -117,35 +122,6 @@ func Connect(port string) (*RemoteDebugger, error) {
 	return remote, nil
 }
 
-func (remote *RemoteDebugger) readMessages() {
-	buf := make([]byte, 4096)
-	var bytes []byte
-
-	for !remote.closed {
-		if n, err := remote.ws.Read(buf); err != nil {
-			log.Println("read error", err)
-			if err == io.EOF {
-				break
-			}
-		} else {
-			bytes = append(bytes, buf[:n]...)
-
-			if n < len(buf) {
-				log.Println("read", string(bytes))
-				bytes = nil
-			}
-		}
-	}
-}
-
-type wsResult struct {
-	Id     int             `json:"id"`
-	Result json.RawMessage `json:"result"`
-
-	Method string          `json:"Method"`
-	Params json.RawMessage `json:"params"`
-}
-
 func (remote *RemoteDebugger) Close() error {
 	remote.closed = true
 	return remote.ws.Close()
@@ -153,14 +129,26 @@ func (remote *RemoteDebugger) Close() error {
 
 type wsParams map[string]interface{}
 
-func (remote *RemoteDebugger) sendRequest(method string, params wsParams) (*wsResult, error) {
+type wsMessage struct {
+	Id     int             `json:"id"`
+	Result json.RawMessage `json:"result"`
+
+	Method string          `json:"Method"`
+	Params json.RawMessage `json:"Params"`
+}
+
+func (remote *RemoteDebugger) sendRequest(method string, params wsParams) (json.RawMessage, error) {
+	remote.r_lock.Lock()
+	reqid := remote.reqid
+	remote.responses[reqid] = make(chan json.RawMessage, 1)
+	remote.reqid++
+	remote.r_lock.Unlock()
+
 	command := map[string]interface{}{
-		"id":     remote.reqid,
+		"id":     reqid,
 		"method": method,
 		"params": params,
 	}
-
-	remote.reqid++
 
 	bytes, err := json.Marshal(command)
 	if err != nil {
@@ -174,33 +162,62 @@ func (remote *RemoteDebugger) sendRequest(method string, params wsParams) (*wsRe
 		return nil, err
 	}
 
-	/*
-		buf := make([]byte, 4096)
-		bytes = bytes[:0]
+	res := <-remote.responses[reqid]
+	remote.r_lock.Lock()
+	remote.responses[reqid] = nil
+	remote.r_lock.Unlock()
 
-		for {
-			if n, err := remote.ws.Read(buf); err != nil {
-				return nil, err
-			} else {
+	return res, nil
+}
+
+func (remote *RemoteDebugger) readMessages() {
+	buf := make([]byte, 4096)
+	var bytes []byte
+
+	for !remote.closed {
+		if n, err := remote.ws.Read(buf); err != nil {
+			log.Println("read error", err)
+			if err == io.EOF {
+				break
+			}
+		} else {
+			if n > 0 {
 				bytes = append(bytes, buf[:n]...)
 
-				if n < len(buf) {
-					break
+				// hack to check end of message
+				if bytes[0] == '{' && bytes[len(bytes)-1] != '}' {
+					continue
 				}
 			}
+
+			var message wsMessage
+
+			//
+			// unmarshall message
+			//
+			if err := json.Unmarshal(bytes, &message); err != nil {
+				log.Println("error unmarshaling", string(bytes), len(bytes), err)
+			} else if message.Method != "" {
+				//
+				// should be an event notification
+				//
+				log.Println("EVENT", message.Method, string(message.Params))
+			} else {
+				//
+				// should be a method reply
+				//
+				remote.r_lock.Lock()
+				ch := remote.responses[message.Id]
+				remote.r_lock.Unlock()
+
+				if ch != nil {
+					ch <- message.Result
+				}
+			}
+
+			bytes = nil
 		}
-
-		var res wsResult
-
-		err = json.Unmarshal(bytes, &res)
-		if err != nil {
-			return nil, err
-		}
-
-		return &res, nil
-	*/
-
-	return nil, nil
+	}
 }
 
 //
@@ -295,7 +312,7 @@ func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
 func (remote *RemoteDebugger) getDomains() error {
 	res, err := remote.sendRequest("Schema.getDomains", nil)
 	if res != nil {
-		fmt.Println(res.Id, string(res.Result))
+		log.Println(" ", string(res))
 	}
 
 	return err
@@ -307,7 +324,7 @@ func (remote *RemoteDebugger) Navigate(url string) error {
 	})
 
 	if res != nil {
-		fmt.Println(res.Id, string(res.Result))
+		log.Println(" ", string(res))
 	}
 
 	return err
@@ -324,7 +341,7 @@ func (remote *RemoteDebugger) events(domain string, enable bool) error {
 
 	res, err := remote.sendRequest(method, nil)
 	if res != nil {
-		fmt.Println(res.Id, string(res.Result))
+		log.Println(" ", string(res))
 	}
 
 	return err
@@ -360,7 +377,7 @@ func runCommand(commandString string) error {
 }
 
 func main() {
-	cmd := flag.String("cmd", "open /Applications/Google\\ Chrome.app --args --remote-debugging-port=9222 --disable-extensions about:blank", "command to execute to start the browser")
+	cmd := flag.String("cmd", "open /Applications/Google\\ Chrome.app --args --remote-debugging-port=9222 --disable-extensions --headless about:blank", "command to execute to start the browser")
 	port := flag.String("port", "localhost:9222", "Chrome remote debugger port")
 	filter := flag.String("filter", "page", "filter tab list")
 	page := flag.String("page", "http://httpbin.org", "page to load")

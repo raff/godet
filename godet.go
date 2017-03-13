@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/gobs/httpclient"
 	"golang.org/x/net/websocket"
@@ -75,9 +76,10 @@ func (t Tab) String() string {
 // RemoteDebugger
 //
 type RemoteDebugger struct {
-	http  *httpclient.HttpClient
-	ws    *websocket.Conn
-	reqid int
+	http   *httpclient.HttpClient
+	ws     *websocket.Conn
+	reqid  int
+	closed bool
 }
 
 //
@@ -108,12 +110,36 @@ func Connect(port string) (*RemoteDebugger, error) {
 		return nil, err
 	}
 
+	go remote.readMessages()
 	return remote, nil
+}
+
+func (remote *RemoteDebugger) readMessages() {
+	buf := make([]byte, 4096)
+	var bytes []byte
+
+	for !remote.closed {
+		if n, err := remote.ws.Read(buf); err != nil {
+			log.Println("read error", err)
+		} else {
+			bytes = append(bytes, buf[:n]...)
+
+			if n < len(buf) {
+				log.Println("read", string(bytes))
+				bytes = nil
+			}
+		}
+	}
 }
 
 type wsResult struct {
 	Id     int             `json:"id"`
 	Result json.RawMessage `json:"result"`
+}
+
+func (remote *RemoteDebugger) Close() error {
+	remote.closed = true
+	return remote.ws.Close()
 }
 
 type wsParams map[string]interface{}
@@ -139,29 +165,33 @@ func (remote *RemoteDebugger) sendRequest(cmd string, params wsParams) (*wsResul
 		return nil, err
 	}
 
-	buf := make([]byte, 4096)
-	bytes = bytes[:0]
+	/*
+		buf := make([]byte, 4096)
+		bytes = bytes[:0]
 
-	for {
-		if n, err := remote.ws.Read(buf); err != nil {
-			return nil, err
-		} else {
-			bytes = append(bytes, buf[:n]...)
+		for {
+			if n, err := remote.ws.Read(buf); err != nil {
+				return nil, err
+			} else {
+				bytes = append(bytes, buf[:n]...)
 
-			if n < len(buf) {
-				break
+				if n < len(buf) {
+					break
+				}
 			}
 		}
-	}
 
-	var res wsResult
+		var res wsResult
 
-	err = json.Unmarshal(bytes, &res)
-	if err != nil {
-		return nil, err
-	}
+		err = json.Unmarshal(bytes, &res)
+		if err != nil {
+			return nil, err
+		}
 
-	return &res, nil
+		return &res, nil
+	*/
+
+	return nil, nil
 }
 
 //
@@ -217,7 +247,7 @@ func (remote *RemoteDebugger) TabList(filter string) ([]*Tab, error) {
 //
 // Activate specified tab
 //
-func (remote *RemoteDebugger) Activate(tab *Tab) error {
+func (remote *RemoteDebugger) ActivateTab(tab *Tab) error {
 	resp, err := remote.http.Get("/json/activate/"+tab.Id, nil, nil)
 	resp.Close()
 	return err
@@ -226,7 +256,7 @@ func (remote *RemoteDebugger) Activate(tab *Tab) error {
 //
 // Close specified tab
 //
-func (remote *RemoteDebugger) Close(tab *Tab) error {
+func (remote *RemoteDebugger) CloseTab(tab *Tab) error {
 	resp, err := remote.http.Get("/json/close/"+tab.Id, nil, nil)
 	resp.Close()
 	return err
@@ -274,15 +304,51 @@ func (remote *RemoteDebugger) Navigate(url string) error {
 	return err
 }
 
+func (remote *RemoteDebugger) events(domain string, enable bool) error {
+	cmd := domain
+
+	if enable {
+		cmd += ".enable"
+	} else {
+		cmd += ".disable"
+	}
+
+	res, err := remote.sendRequest(cmd, nil)
+	if res != nil {
+		fmt.Println(res.Id, string(res.Result))
+	}
+
+	return err
+}
+
+func (remote *RemoteDebugger) DOMEvents(enable bool) error {
+	return remote.events("DOM", enable)
+}
+
+func (remote *RemoteDebugger) PageEvents(enable bool) error {
+	return remote.events("Page", enable)
+}
+
+func (remote *RemoteDebugger) NetworkEvents(enable bool) error {
+	return remote.events("Network", enable)
+}
+
+func (remote *RemoteDebugger) RuntimeEvents(enable bool) error {
+	return remote.events("Runtime", enable)
+}
+
 func main() {
 	port := flag.String("port", "localhost:9222", "Chrome remote debugger port")
 	filter := flag.String("filter", "page", "filter tab list")
+	page := flag.String("page", "http://httpbin.org", "page to load")
 	flag.Parse()
 
 	remote, err := Connect(*port)
 	if err != nil {
 		log.Fatal("connect", err)
 	}
+
+	defer remote.Close()
 
 	fmt.Println()
 	fmt.Println("Version:")
@@ -299,11 +365,18 @@ func main() {
 	fmt.Println()
 	fmt.Println(remote.getDomains())
 
+	remote.PageEvents(true)
+	remote.DOMEvents(true)
+	remote.RuntimeEvents(true)
+	remote.NetworkEvents(true)
+
 	l := len(tabs)
 	if l > 0 {
-		remote.Activate(tabs[l-1])
+		remote.ActivateTab(tabs[l-1])
 
 		fmt.Println()
-		fmt.Println(remote.Navigate("http://httpbin.org/"))
+		fmt.Println(remote.Navigate(*page))
 	}
+
+	time.Sleep(60 * time.Second)
 }

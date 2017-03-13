@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"os/exec"
 	"time"
 
+	"github.com/gobs/args"
 	"github.com/gobs/httpclient"
 	"golang.org/x/net/websocket"
 )
@@ -121,6 +124,9 @@ func (remote *RemoteDebugger) readMessages() {
 	for !remote.closed {
 		if n, err := remote.ws.Read(buf); err != nil {
 			log.Println("read error", err)
+			if err == io.EOF {
+				break
+			}
 		} else {
 			bytes = append(bytes, buf[:n]...)
 
@@ -135,6 +141,9 @@ func (remote *RemoteDebugger) readMessages() {
 type wsResult struct {
 	Id     int             `json:"id"`
 	Result json.RawMessage `json:"result"`
+
+	Method string          `json:"Method"`
+	Params json.RawMessage `json:"params"`
 }
 
 func (remote *RemoteDebugger) Close() error {
@@ -144,10 +153,10 @@ func (remote *RemoteDebugger) Close() error {
 
 type wsParams map[string]interface{}
 
-func (remote *RemoteDebugger) sendRequest(cmd string, params wsParams) (*wsResult, error) {
+func (remote *RemoteDebugger) sendRequest(method string, params wsParams) (*wsResult, error) {
 	command := map[string]interface{}{
 		"id":     remote.reqid,
-		"method": cmd,
+		"method": method,
 		"params": params,
 	}
 
@@ -305,15 +314,15 @@ func (remote *RemoteDebugger) Navigate(url string) error {
 }
 
 func (remote *RemoteDebugger) events(domain string, enable bool) error {
-	cmd := domain
+	method := domain
 
 	if enable {
-		cmd += ".enable"
+		method += ".enable"
 	} else {
-		cmd += ".disable"
+		method += ".disable"
 	}
 
-	res, err := remote.sendRequest(cmd, nil)
+	res, err := remote.sendRequest(method, nil)
 	if res != nil {
 		fmt.Println(res.Id, string(res.Result))
 	}
@@ -337,11 +346,29 @@ func (remote *RemoteDebugger) RuntimeEvents(enable bool) error {
 	return remote.events("Runtime", enable)
 }
 
+func runCommand(commandString string) error {
+	parts := args.GetArgs(commandString)
+	cmd := exec.Command(parts[0], parts[1:]...)
+	err := cmd.Start()
+	if err == nil {
+		time.Sleep(time.Second) // give the app some time to start
+	} else {
+		log.Println("command start", err)
+	}
+
+	return err
+}
+
 func main() {
+	cmd := flag.String("cmd", "open /Applications/Google\\ Chrome.app --args --remote-debugging-port=9222 --disable-extensions about:blank", "command to execute to start the browser")
 	port := flag.String("port", "localhost:9222", "Chrome remote debugger port")
 	filter := flag.String("filter", "page", "filter tab list")
 	page := flag.String("page", "http://httpbin.org", "page to load")
 	flag.Parse()
+
+	if *cmd != "" {
+		runCommand(*cmd)
+	}
 
 	remote, err := Connect(*port)
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os/exec"
 	"sync"
@@ -12,7 +11,8 @@ import (
 
 	"github.com/gobs/args"
 	"github.com/gobs/httpclient"
-	"golang.org/x/net/websocket"
+	"github.com/gobs/pretty"
+	"github.com/gorilla/websocket"
 )
 
 func decode(resp *httpclient.HttpResponse, v interface{}) error {
@@ -42,19 +42,6 @@ type Version struct {
 	WebKitVersion   string `json:"WebKit-Version"`
 }
 
-func (v *Version) String() string {
-	return fmt.Sprintf("Browser: %v\n"+
-		"Protocol Version: %v\n"+
-		"User Agent: %v\n"+
-		"V8 Version: %v\n"+
-		"WebKit Version: %v\n",
-		v.Browser,
-		v.ProtocolVersion,
-		v.UserAgent,
-		v.V8Version,
-		v.WebKitVersion)
-}
-
 //
 // Chrome open tab or page
 //
@@ -66,23 +53,6 @@ type Tab struct {
 	Url         string `json:"url"`
 	WsUrl       string `json:"webSocketDebuggerUrl"`
 	DevUrl      string `json:"devtoolsFrontendUrl"`
-}
-
-func (t Tab) String() string {
-	return fmt.Sprintf("Id: %v\n"+
-		"Type: %v\n"+
-		"Description: %v\n"+
-		"Title: %v\n"+
-		"Url: %v\n"+
-		"WebSocket Url: %v\n"+
-		"Devtools Url: %v\n",
-		t.Id,
-		t.Type,
-		t.Description,
-		t.Title,
-		t.Url,
-		t.WsUrl,
-		t.DevUrl)
 }
 
 //
@@ -97,6 +67,7 @@ type RemoteDebugger struct {
 	sync.Mutex
 	closed chan bool
 
+	requests  chan Params
 	responses map[int]chan json.RawMessage
 	callbacks map[string]EventCallback
 	events    chan wsMessage
@@ -111,12 +82,15 @@ type EventCallback func(params Params)
 func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 	remote := &RemoteDebugger{
 		http:      httpclient.NewHttpClient("http://" + port),
+		requests:  make(chan Params),
 		responses: map[int]chan json.RawMessage{},
 		callbacks: map[string]EventCallback{},
-		events:    make(chan wsMessage, 8),
+		events:    make(chan wsMessage, 256),
 		closed:    make(chan bool),
 		verbose:   verbose,
 	}
+
+	remote.http.Verbose = verbose
 
 	// check http connection
 	tabs, err := remote.TabList("")
@@ -134,11 +108,12 @@ func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 	}
 
 	// check websocket connection
-	if remote.ws, err = websocket.Dial(wsUrl, "", "http://localhost"); err != nil {
+	if remote.ws, _, err = websocket.DefaultDialer.Dial(wsUrl, nil); err != nil {
 		return nil, err
 	}
 
 	go remote.readMessages()
+	go remote.sendMessages()
 	go remote.processEvents()
 	return remote, nil
 }
@@ -164,25 +139,13 @@ func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[str
 	remote.reqid++
 	remote.Unlock()
 
-	command := map[string]interface{}{
+	command := Params{
 		"id":     reqid,
 		"method": method,
 		"params": params,
 	}
 
-	bytes, err := json.Marshal(command)
-	if err != nil {
-		return nil, err
-	}
-
-	if remote.verbose {
-		log.Println("SEND", string(bytes))
-	}
-
-	_, err = remote.ws.Write(bytes)
-	if err != nil {
-		return nil, err
-	}
+	remote.requests <- command
 
 	reply := <-remote.responses[reqid]
 	remote.Lock()
@@ -196,9 +159,26 @@ func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[str
 	return nil, nil
 }
 
+func (remote *RemoteDebugger) sendMessages() {
+	for message := range remote.requests {
+		bytes, err := json.Marshal(message)
+		if err != nil {
+			log.Println("error marshaling message", err)
+			continue
+		}
+
+		if remote.verbose {
+			log.Println("SEND", string(bytes))
+		}
+
+		err = remote.ws.WriteMessage(websocket.TextMessage, bytes)
+		if err != nil {
+			log.Println("error sending message", err)
+		}
+	}
+}
+
 func (remote *RemoteDebugger) readMessages() {
-	buf := make([]byte, 65536)
-	var bytes []byte
 loop:
 	for {
 		select {
@@ -206,21 +186,13 @@ loop:
 			break loop
 
 		default:
-			if n, err := remote.ws.Read(buf); err != nil {
+			_, bytes, err := remote.ws.ReadMessage()
+			if err != nil {
 				log.Println("read error", err)
-				if err == io.EOF {
-					break
+				if websocket.IsUnexpectedCloseError(err) {
+					break loop
 				}
 			} else {
-				if n > 0 {
-					bytes = append(bytes, buf[:n]...)
-
-					// hack to check end of message
-					if bytes[0] == '{' && bytes[len(bytes)-1] != '}' {
-						continue
-					}
-				}
-
 				var message wsMessage
 
 				//
@@ -231,13 +203,14 @@ loop:
 				} else if message.Method != "" {
 					if remote.verbose {
 						log.Println("EVENT", message.Method, string(message.Params))
+						log.Println(len(remote.events))
 					}
 
 					select {
 					case remote.events <- message:
 
 					case <-remote.closed:
-						break
+						break loop
 					}
 				} else {
 					//
@@ -255,8 +228,6 @@ loop:
 						ch <- message.Result
 					}
 				}
-
-				bytes = nil
 			}
 		}
 	}
@@ -446,9 +417,11 @@ func runCommand(commandString string) error {
 func main() {
 	cmd := flag.String("cmd", "open /Applications/Google\\ Chrome.app --args --remote-debugging-port=9222 --disable-extensions --headless about:blank", "command to execute to start the browser")
 	port := flag.String("port", "localhost:9222", "Chrome remote debugger port")
-	filter := flag.String("filter", "page", "filter tab list")
-	page := flag.String("page", "http://httpbin.org", "page to load")
 	verbose := flag.Bool("verbose", false, "verbose logging")
+	version := flag.Bool("version", false, "display remote devtools version")
+	listtabs := flag.Bool("tabs", false, "show list of open tabs")
+	filter := flag.String("filter", "page", "filter tab list")
+	domains := flag.Bool("domains", false, "show list of available domains")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -462,20 +435,32 @@ func main() {
 
 	defer remote.Close()
 
-	fmt.Println()
-	fmt.Println("Version:")
-	fmt.Println(remote.Version())
+	if *version {
+		v, err := remote.Version()
+		if err != nil {
+			log.Fatal("cannot get version: ", err)
+		}
 
-	fmt.Println()
-	tabs, err := remote.TabList(*filter)
-	if err != nil {
-		log.Fatal("cannot get list of tabs: ", err)
+		pretty.PrettyPrint(v)
 	}
 
-	fmt.Println(tabs)
+	if *listtabs {
+		tabs, err := remote.TabList(*filter)
+		if err != nil {
+			log.Fatal("cannot get list of tabs: ", err)
+		}
 
-	fmt.Println()
-	fmt.Println(remote.getDomains())
+		pretty.PrettyPrint(tabs)
+	}
+
+	if *domains {
+		d, err := remote.getDomains()
+		if err != nil {
+			log.Fatal("cannot get domains: ", err)
+		}
+
+		pretty.PrettyPrint(d)
+	}
 
 	remote.PageEvents(true)
 	remote.DOMEvents(true)
@@ -488,8 +473,10 @@ func main() {
 			params["response"].(map[string]interface{})["url"])
 
 		if params["type"].(string) == "Image" {
-			req := params["requestId"].(string)
-			log.Println(remote.GetResponseBody(req))
+			go func() {
+				req := params["requestId"].(string)
+				log.Println(remote.GetResponseBody(req))
+			}()
 		}
 	})
 
@@ -500,12 +487,28 @@ func main() {
 			params["request"].(map[string]interface{})["url"])
 	})
 
-	l := len(tabs)
-	if l > 0 {
-		remote.ActivateTab(tabs[l-1])
+	if flag.NArg() > 0 {
+		p := flag.Arg(0)
 
-		fmt.Println()
-		fmt.Println(remote.Navigate(*page))
+		log.Println("loading page", p)
+
+		tabs, err := remote.TabList("page")
+		if err != nil {
+			log.Fatal("cannot get tabs", err)
+		}
+
+		if len(tabs) == 0 {
+			_, err = remote.NewTab(p)
+		} else {
+			err := remote.ActivateTab(tabs[0])
+			if err == nil {
+				fmt.Println(remote.Navigate(p))
+			}
+		}
+
+		if err != nil {
+			log.Println("error loading page", err)
+		}
 	}
 
 	time.Sleep(60 * time.Second)

@@ -80,14 +80,20 @@ func (t Tab) String() string {
 // RemoteDebugger
 //
 type RemoteDebugger struct {
-	http   *httpclient.HttpClient
-	ws     *websocket.Conn
-	reqid  int
-	closed bool
+	http    *httpclient.HttpClient
+	ws      *websocket.Conn
+	reqid   int
+	closed  bool
+	verbose bool
+
+	sync.Mutex
 
 	responses map[int]chan json.RawMessage
-	r_lock    sync.Mutex
+	callbacks map[string]EventCallback
 }
+
+type Params map[string]interface{}
+type EventCallback func(params Params)
 
 //
 // Connect to the remote debugger and return `RemoteDebugger` object
@@ -96,6 +102,7 @@ func Connect(port string) (*RemoteDebugger, error) {
 	remote := &RemoteDebugger{
 		http:      httpclient.NewHttpClient("http://" + port),
 		responses: map[int]chan json.RawMessage{},
+		callbacks: map[string]EventCallback{},
 	}
 
 	// check http connection
@@ -127,8 +134,6 @@ func (remote *RemoteDebugger) Close() error {
 	return remote.ws.Close()
 }
 
-type wsParams map[string]interface{}
-
 type wsMessage struct {
 	Id     int             `json:"id"`
 	Result json.RawMessage `json:"result"`
@@ -137,12 +142,12 @@ type wsMessage struct {
 	Params json.RawMessage `json:"Params"`
 }
 
-func (remote *RemoteDebugger) sendRequest(method string, params wsParams) (json.RawMessage, error) {
-	remote.r_lock.Lock()
+func (remote *RemoteDebugger) sendRequest(method string, params Params) (json.RawMessage, error) {
+	remote.Lock()
 	reqid := remote.reqid
 	remote.responses[reqid] = make(chan json.RawMessage, 1)
 	remote.reqid++
-	remote.r_lock.Unlock()
+	remote.Unlock()
 
 	command := map[string]interface{}{
 		"id":     reqid,
@@ -155,7 +160,9 @@ func (remote *RemoteDebugger) sendRequest(method string, params wsParams) (json.
 		return nil, err
 	}
 
-	log.Println("send", string(bytes))
+	if remote.verbose {
+		log.Println("send", string(bytes))
+	}
 
 	_, err = remote.ws.Write(bytes)
 	if err != nil {
@@ -163,9 +170,9 @@ func (remote *RemoteDebugger) sendRequest(method string, params wsParams) (json.
 	}
 
 	res := <-remote.responses[reqid]
-	remote.r_lock.Lock()
+	remote.Lock()
 	remote.responses[reqid] = nil
-	remote.r_lock.Unlock()
+	remote.Unlock()
 
 	return res, nil
 }
@@ -201,14 +208,27 @@ func (remote *RemoteDebugger) readMessages() {
 				//
 				// should be an event notification
 				//
-				log.Println("EVENT", message.Method, string(message.Params))
+				remote.Lock()
+				cb := remote.callbacks[message.Method]
+				remote.Unlock()
+
+				if cb != nil {
+					var params Params
+					if err := json.Unmarshal(message.Params, &params); err != nil {
+						log.Println("error unmarshaling", string(message.Params), len(message.Params), err)
+					} else {
+						cb(params)
+					}
+				} else if remote.verbose {
+					log.Println("EVENT", message.Method, string(message.Params))
+				}
 			} else {
 				//
 				// should be a method reply
 				//
-				remote.r_lock.Lock()
+				remote.Lock()
 				ch := remote.responses[message.Id]
-				remote.r_lock.Unlock()
+				remote.Unlock()
 
 				if ch != nil {
 					ch <- message.Result
@@ -292,7 +312,7 @@ func (remote *RemoteDebugger) CloseTab(tab *Tab) error {
 // Create a new tab
 //
 func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
-	params := map[string]interface{}{}
+	params := Params{}
 	if url != "" {
 		params["url"] = url
 	}
@@ -319,7 +339,7 @@ func (remote *RemoteDebugger) getDomains() error {
 }
 
 func (remote *RemoteDebugger) Navigate(url string) error {
-	res, err := remote.sendRequest("Page.navigate", wsParams{
+	res, err := remote.sendRequest("Page.navigate", Params{
 		"url": url,
 	})
 
@@ -328,6 +348,12 @@ func (remote *RemoteDebugger) Navigate(url string) error {
 	}
 
 	return err
+}
+
+func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
+	remote.Lock()
+	remote.callbacks[method] = cb
+	remote.Unlock()
 }
 
 func (remote *RemoteDebugger) events(domain string, enable bool) error {
@@ -413,6 +439,17 @@ func main() {
 	remote.DOMEvents(true)
 	remote.RuntimeEvents(true)
 	remote.NetworkEvents(true)
+
+	remote.CallbackEvent("Network.responseReceived", func(params Params) {
+		log.Println("responseReceived",
+			params["response"].(map[string]interface{})["url"])
+	})
+
+	remote.CallbackEvent("Network.requestWillBeSent", func(params Params) {
+		log.Println("requestWillBeSent",
+			params["documentURL"],
+			params["request"].(map[string]interface{})["url"])
+	})
 
 	l := len(tabs)
 	if l > 0 {

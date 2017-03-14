@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os/exec"
 	"time"
@@ -26,6 +25,9 @@ func main() {
 	listtabs := flag.Bool("tabs", false, "show list of open tabs")
 	filter := flag.String("filter", "page", "filter tab list")
 	domains := flag.Bool("domains", false, "show list of available domains")
+	requests := flag.Bool("requests", false, "show request notifications")
+	responses := flag.Bool("responses", false, "show response notifications")
+	console := flag.Bool("console", false, "show console messages")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -83,30 +85,46 @@ func main() {
 		pretty.PrettyPrint(d)
 	}
 
-	remote.PageEvents(true)
-	remote.DOMEvents(true)
+	if *requests {
+		remote.CallbackEvent("Network.requestWillBeSent", func(params godet.Params) {
+			log.Println("requestWillBeSent",
+				params["type"],
+				params["documentURL"],
+				params["request"].(map[string]interface{})["url"])
+		})
+	}
+
+	if *responses {
+		remote.CallbackEvent("Network.responseReceived", func(params godet.Params) {
+			log.Println("responseReceived",
+				params["type"],
+				params["response"].(map[string]interface{})["url"])
+
+			if params["type"].(string) == "Image" {
+				go func() {
+					req := params["requestId"].(string)
+					log.Println(remote.GetResponseBody(req))
+				}()
+			}
+		})
+	}
+
+	if *console {
+		remote.CallbackEvent("Runtime.consoleAPICalled", func(params godet.Params) {
+			args := []interface{}{"CONSOLE", params["type"]}
+
+			for _, arg := range params["args"].([]interface{}) {
+				args = append(args, arg.(map[string]interface{})["value"])
+			}
+
+			log.Println(args...)
+		})
+	}
+
 	remote.RuntimeEvents(true)
 	remote.NetworkEvents(true)
-
-	remote.CallbackEvent("Network.responseReceived", func(params godet.Params) {
-		log.Println("responseReceived",
-			params["type"],
-			params["response"].(map[string]interface{})["url"])
-
-		if params["type"].(string) == "Image" {
-			go func() {
-				req := params["requestId"].(string)
-				log.Println(remote.GetResponseBody(req))
-			}()
-		}
-	})
-
-	remote.CallbackEvent("Network.requestWillBeSent", func(params godet.Params) {
-		log.Println("requestWillBeSent",
-			params["type"],
-			params["documentURL"],
-			params["request"].(map[string]interface{})["url"])
-	})
+	remote.PageEvents(true)
+	remote.DOMEvents(true)
 
 	if flag.NArg() > 0 {
 		p := flag.Arg(0)
@@ -123,7 +141,7 @@ func main() {
 		} else {
 			err := remote.ActivateTab(tabs[0])
 			if err == nil {
-				fmt.Println(remote.Navigate(p))
+				log.Println(remote.Navigate(p))
 			}
 		}
 

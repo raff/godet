@@ -99,6 +99,7 @@ type RemoteDebugger struct {
 
 	responses map[int]chan json.RawMessage
 	callbacks map[string]EventCallback
+	events    chan wsMessage
 }
 
 type Params map[string]interface{}
@@ -112,6 +113,7 @@ func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 		http:      httpclient.NewHttpClient("http://" + port),
 		responses: map[int]chan json.RawMessage{},
 		callbacks: map[string]EventCallback{},
+		events:    make(chan wsMessage, 8),
 		verbose:   verbose,
 	}
 
@@ -136,12 +138,17 @@ func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 	}
 
 	go remote.readMessages()
+	go remote.processEvents()
 	return remote, nil
 }
 
 func (remote *RemoteDebugger) Close() error {
+	remote.Lock()
 	remote.closed = true
-	return remote.ws.Close()
+	remote.Unlock()
+	err := remote.ws.Close()
+	close(remote.events)
+	return err
 }
 
 type wsMessage struct {
@@ -150,6 +157,13 @@ type wsMessage struct {
 
 	Method string          `json:"Method"`
 	Params json.RawMessage `json:"Params"`
+}
+
+func (remote *RemoteDebugger) isClosed() (ret bool) {
+	remote.Lock()
+	ret = remote.closed
+	remote.Unlock()
+	return
 }
 
 func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[string]interface{}, error) {
@@ -199,7 +213,7 @@ func (remote *RemoteDebugger) readMessages() {
 	buf := make([]byte, 4096)
 	var bytes []byte
 
-	for !remote.closed {
+	for !remote.isClosed() {
 		if n, err := remote.ws.Read(buf); err != nil {
 			log.Println("read error", err)
 			if err == io.EOF {
@@ -227,21 +241,7 @@ func (remote *RemoteDebugger) readMessages() {
 					log.Println("EVENT", message.Method, string(message.Params))
 				}
 
-				//
-				// should be an event notification
-				//
-				remote.Lock()
-				cb := remote.callbacks[message.Method]
-				remote.Unlock()
-
-				if cb != nil {
-					var params Params
-					if err := json.Unmarshal(message.Params, &params); err != nil {
-						log.Println("error unmarshaling", string(message.Params), len(message.Params), err)
-					} else {
-						cb(params)
-					}
-				}
+				remote.events <- message
 			} else {
 				//
 				// should be a method reply
@@ -256,6 +256,23 @@ func (remote *RemoteDebugger) readMessages() {
 			}
 
 			bytes = nil
+		}
+	}
+}
+
+func (remote *RemoteDebugger) processEvents() {
+	for ev := range remote.events {
+		remote.Lock()
+		cb := remote.callbacks[ev.Method]
+		remote.Unlock()
+
+		if cb != nil {
+			var params Params
+			if err := json.Unmarshal(ev.Params, &params); err != nil {
+				log.Println("error unmarshaling", string(ev.Params), len(ev.Params), err)
+			} else {
+				cb(params)
+			}
 		}
 	}
 }
@@ -380,7 +397,7 @@ func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Unlock()
 }
 
-func (remote *RemoteDebugger) events(domain string, enable bool) error {
+func (remote *RemoteDebugger) domainEvents(domain string, enable bool) error {
 	method := domain
 
 	if enable {
@@ -394,19 +411,19 @@ func (remote *RemoteDebugger) events(domain string, enable bool) error {
 }
 
 func (remote *RemoteDebugger) DOMEvents(enable bool) error {
-	return remote.events("DOM", enable)
+	return remote.domainEvents("DOM", enable)
 }
 
 func (remote *RemoteDebugger) PageEvents(enable bool) error {
-	return remote.events("Page", enable)
+	return remote.domainEvents("Page", enable)
 }
 
 func (remote *RemoteDebugger) NetworkEvents(enable bool) error {
-	return remote.events("Network", enable)
+	return remote.domainEvents("Network", enable)
 }
 
 func (remote *RemoteDebugger) RuntimeEvents(enable bool) error {
-	return remote.events("Runtime", enable)
+	return remote.domainEvents("Runtime", enable)
 }
 
 func runCommand(commandString string) error {
@@ -468,9 +485,7 @@ func main() {
 
 		if params["type"].(string) == "Image" {
 			req := params["requestId"].(string)
-			go func() {
-				log.Println(remote.GetResponseBody(req))
-			}()
+			log.Println(remote.GetResponseBody(req))
 		}
 	})
 

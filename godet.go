@@ -22,6 +22,15 @@ func decode(resp *httpclient.HttpResponse, v interface{}) error {
 	return err
 }
 
+func unmarshal(payload []byte) (map[string]interface{}, error) {
+	var response map[string]interface{}
+	err := json.Unmarshal(payload, &response)
+	if err != nil {
+		log.Println("error unmarshaling", string(payload), len(payload), err)
+	}
+	return response, err
+}
+
 //
 // DevTools version info
 //
@@ -98,11 +107,12 @@ type EventCallback func(params Params)
 //
 // Connect to the remote debugger and return `RemoteDebugger` object
 //
-func Connect(port string) (*RemoteDebugger, error) {
+func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 	remote := &RemoteDebugger{
 		http:      httpclient.NewHttpClient("http://" + port),
 		responses: map[int]chan json.RawMessage{},
 		callbacks: map[string]EventCallback{},
+		verbose:   verbose,
 	}
 
 	// check http connection
@@ -142,7 +152,7 @@ type wsMessage struct {
 	Params json.RawMessage `json:"Params"`
 }
 
-func (remote *RemoteDebugger) sendRequest(method string, params Params) (json.RawMessage, error) {
+func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[string]interface{}, error) {
 	remote.Lock()
 	reqid := remote.reqid
 	remote.responses[reqid] = make(chan json.RawMessage, 1)
@@ -169,12 +179,20 @@ func (remote *RemoteDebugger) sendRequest(method string, params Params) (json.Ra
 		return nil, err
 	}
 
-	res := <-remote.responses[reqid]
+	reply := <-remote.responses[reqid]
 	remote.Lock()
 	remote.responses[reqid] = nil
 	remote.Unlock()
 
-	return res, nil
+	if remote.verbose {
+		log.Println("reply", reqid, string(reply))
+	}
+
+	if reply != nil {
+		return unmarshal(reply)
+	}
+
+	return nil, nil
 }
 
 func (remote *RemoteDebugger) readMessages() {
@@ -205,6 +223,10 @@ func (remote *RemoteDebugger) readMessages() {
 			if err := json.Unmarshal(bytes, &message); err != nil {
 				log.Println("error unmarshaling", string(bytes), len(bytes), err)
 			} else if message.Method != "" {
+				if remote.verbose {
+					log.Println("EVENT", message.Method, string(message.Params))
+				}
+
 				//
 				// should be an event notification
 				//
@@ -219,8 +241,6 @@ func (remote *RemoteDebugger) readMessages() {
 					} else {
 						cb(params)
 					}
-				} else if remote.verbose {
-					log.Println("EVENT", message.Method, string(message.Params))
 				}
 			} else {
 				//
@@ -329,23 +349,15 @@ func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
 	return &tab, nil
 }
 
-func (remote *RemoteDebugger) getDomains() error {
+func (remote *RemoteDebugger) getDomains() (map[string]interface{}, error) {
 	res, err := remote.sendRequest("Schema.getDomains", nil)
-	if res != nil {
-		log.Println(" ", string(res))
-	}
-
-	return err
+	return res, err
 }
 
 func (remote *RemoteDebugger) Navigate(url string) error {
-	res, err := remote.sendRequest("Page.navigate", Params{
+	_, err := remote.sendRequest("Page.navigate", Params{
 		"url": url,
 	})
-
-	if res != nil {
-		log.Println(" ", string(res))
-	}
 
 	return err
 }
@@ -365,11 +377,7 @@ func (remote *RemoteDebugger) events(domain string, enable bool) error {
 		method += ".disable"
 	}
 
-	res, err := remote.sendRequest(method, nil)
-	if res != nil {
-		log.Println(" ", string(res))
-	}
-
+	_, err := remote.sendRequest(method, nil)
 	return err
 }
 
@@ -407,13 +415,14 @@ func main() {
 	port := flag.String("port", "localhost:9222", "Chrome remote debugger port")
 	filter := flag.String("filter", "page", "filter tab list")
 	page := flag.String("page", "http://httpbin.org", "page to load")
+	verbose := flag.Bool("verbose", false, "verbose logging")
 	flag.Parse()
 
 	if *cmd != "" {
 		runCommand(*cmd)
 	}
 
-	remote, err := Connect(*port)
+	remote, err := Connect(*port, *verbose)
 	if err != nil {
 		log.Fatal("connect", err)
 	}
@@ -442,11 +451,13 @@ func main() {
 
 	remote.CallbackEvent("Network.responseReceived", func(params Params) {
 		log.Println("responseReceived",
+			params["type"],
 			params["response"].(map[string]interface{})["url"])
 	})
 
 	remote.CallbackEvent("Network.requestWillBeSent", func(params Params) {
 		log.Println("requestWillBeSent",
+			params["type"],
 			params["documentURL"],
 			params["request"].(map[string]interface{})["url"])
 	})

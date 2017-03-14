@@ -92,10 +92,10 @@ type RemoteDebugger struct {
 	http    *httpclient.HttpClient
 	ws      *websocket.Conn
 	reqid   int
-	closed  bool
 	verbose bool
 
 	sync.Mutex
+	closed chan bool
 
 	responses map[int]chan json.RawMessage
 	callbacks map[string]EventCallback
@@ -114,6 +114,7 @@ func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 		responses: map[int]chan json.RawMessage{},
 		callbacks: map[string]EventCallback{},
 		events:    make(chan wsMessage, 8),
+		closed:    make(chan bool),
 		verbose:   verbose,
 	}
 
@@ -143,11 +144,8 @@ func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 }
 
 func (remote *RemoteDebugger) Close() error {
-	remote.Lock()
-	remote.closed = true
-	remote.Unlock()
+	close(remote.closed)
 	err := remote.ws.Close()
-	close(remote.events)
 	return err
 }
 
@@ -157,13 +155,6 @@ type wsMessage struct {
 
 	Method string          `json:"Method"`
 	Params json.RawMessage `json:"Params"`
-}
-
-func (remote *RemoteDebugger) isClosed() (ret bool) {
-	remote.Lock()
-	ret = remote.closed
-	remote.Unlock()
-	return
 }
 
 func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[string]interface{}, error) {
@@ -185,7 +176,7 @@ func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[str
 	}
 
 	if remote.verbose {
-		log.Println("send", string(bytes))
+		log.Println("SEND", string(bytes))
 	}
 
 	_, err = remote.ws.Write(bytes)
@@ -198,10 +189,6 @@ func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[str
 	remote.responses[reqid] = nil
 	remote.Unlock()
 
-	if remote.verbose {
-		log.Println("reply", reqid, string(reply))
-	}
-
 	if reply != nil {
 		return unmarshal(reply)
 	}
@@ -210,54 +197,71 @@ func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[str
 }
 
 func (remote *RemoteDebugger) readMessages() {
-	buf := make([]byte, 4096)
+	buf := make([]byte, 65536)
 	var bytes []byte
+loop:
+	for {
+		select {
+		case <-remote.closed:
+			break loop
 
-	for !remote.isClosed() {
-		if n, err := remote.ws.Read(buf); err != nil {
-			log.Println("read error", err)
-			if err == io.EOF {
-				break
-			}
-		} else {
-			if n > 0 {
-				bytes = append(bytes, buf[:n]...)
-
-				// hack to check end of message
-				if bytes[0] == '{' && bytes[len(bytes)-1] != '}' {
-					continue
+		default:
+			if n, err := remote.ws.Read(buf); err != nil {
+				log.Println("read error", err)
+				if err == io.EOF {
+					break
 				}
-			}
-
-			var message wsMessage
-
-			//
-			// unmarshall message
-			//
-			if err := json.Unmarshal(bytes, &message); err != nil {
-				log.Println("error unmarshaling", string(bytes), len(bytes), err)
-			} else if message.Method != "" {
-				if remote.verbose {
-					log.Println("EVENT", message.Method, string(message.Params))
-				}
-
-				remote.events <- message
 			} else {
-				//
-				// should be a method reply
-				//
-				remote.Lock()
-				ch := remote.responses[message.Id]
-				remote.Unlock()
+				if n > 0 {
+					bytes = append(bytes, buf[:n]...)
 
-				if ch != nil {
-					ch <- message.Result
+					// hack to check end of message
+					if bytes[0] == '{' && bytes[len(bytes)-1] != '}' {
+						continue
+					}
 				}
-			}
 
-			bytes = nil
+				var message wsMessage
+
+				//
+				// unmarshall message
+				//
+				if err := json.Unmarshal(bytes, &message); err != nil {
+					log.Println("error unmarshaling", string(bytes), len(bytes), err)
+				} else if message.Method != "" {
+					if remote.verbose {
+						log.Println("EVENT", message.Method, string(message.Params))
+					}
+
+					select {
+					case remote.events <- message:
+
+					case <-remote.closed:
+						break
+					}
+				} else {
+					//
+					// should be a method reply
+					//
+					if remote.verbose {
+						log.Println("REPLY", message.Id, string(message.Result))
+					}
+
+					remote.Lock()
+					ch := remote.responses[message.Id]
+					remote.Unlock()
+
+					if ch != nil {
+						ch <- message.Result
+					}
+				}
+
+				bytes = nil
+			}
 		}
 	}
+
+	close(remote.events)
 }
 
 func (remote *RemoteDebugger) processEvents() {
@@ -505,4 +509,5 @@ func main() {
 	}
 
 	time.Sleep(60 * time.Second)
+	log.Println("Closing")
 }

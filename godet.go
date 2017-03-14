@@ -362,6 +362,18 @@ func (remote *RemoteDebugger) Navigate(url string) error {
 	return err
 }
 
+func (remote *RemoteDebugger) GetResponseBody(req string) (bool, string, error) {
+	res, err := remote.sendRequest("Network.getResponseBody", Params{
+		"requestId": req,
+	})
+
+	if err != nil {
+		return false, "", err
+	} else {
+		return res["base64Encoded"].(bool), res["body"].(string), nil
+	}
+}
+
 func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Lock()
 	remote.callbacks[method] = cb
@@ -453,6 +465,13 @@ func main() {
 		log.Println("responseReceived",
 			params["type"],
 			params["response"].(map[string]interface{})["url"])
+
+		if params["type"].(string) == "Image" {
+			req := params["requestId"].(string)
+			go func() {
+				log.Println(remote.GetResponseBody(req))
+			}()
+		}
 	})
 
 	remote.CallbackEvent("Network.requestWillBeSent", func(params Params) {

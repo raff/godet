@@ -366,6 +366,17 @@ func (remote *RemoteDebugger) GetResponseBody(req string) (bool, string, error) 
 	}
 }
 
+func (remote *RemoteDebugger) GetDocument() (map[string]interface{}, error) {
+	return remote.sendRequest("DOM.getDocument", nil)
+}
+
+func (remote *RemoteDebugger) QuerySelector(nodeId int, selector string) (map[string]interface{}, error) {
+	return remote.sendRequest("DOM.querySelector", Params{
+		"nodeId":   nodeId,
+		"selector": selector,
+	})
+}
+
 func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Lock()
 	remote.callbacks[method] = cb

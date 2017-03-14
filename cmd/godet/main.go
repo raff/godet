@@ -8,6 +8,7 @@ import (
 
 	"github.com/gobs/args"
 	"github.com/gobs/pretty"
+	"github.com/gobs/simplejson"
 	"github.com/raff/godet"
 )
 
@@ -28,6 +29,7 @@ func main() {
 	requests := flag.Bool("requests", false, "show request notifications")
 	responses := flag.Bool("responses", false, "show response notifications")
 	console := flag.Bool("console", false, "show console messages")
+	query := flag.String("query", "", "query against current document")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -129,8 +131,6 @@ func main() {
 	if flag.NArg() > 0 {
 		p := flag.Arg(0)
 
-		log.Println("loading page", p)
-
 		tabs, err := remote.TabList("page")
 		if err != nil {
 			log.Fatal("cannot get tabs", err)
@@ -141,12 +141,32 @@ func main() {
 		} else {
 			err := remote.ActivateTab(tabs[0])
 			if err == nil {
-				log.Println(remote.Navigate(p))
+				err = remote.Navigate(p)
 			}
 		}
 
 		if err != nil {
 			log.Println("error loading page", err)
+		}
+	}
+
+	if *query != "" {
+		res, err := remote.GetDocument()
+		if err != nil {
+			log.Fatal("error getting document", err)
+		}
+
+		doc := simplejson.AsJson(res)
+		id := doc.GetPath("root", "nodeId").MustInt(-1)
+		res, err = remote.QuerySelector(id, *query)
+		if err != nil {
+			log.Fatal("error in querySelector", err)
+		}
+
+		if res == nil {
+			log.Println("no result for", *query)
+		} else {
+			pretty.PrettyPrint(res)
 		}
 	}
 

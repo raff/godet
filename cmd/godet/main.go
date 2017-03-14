@@ -105,7 +105,12 @@ func main() {
 			if params["type"].(string) == "Image" {
 				go func() {
 					req := params["requestId"].(string)
-					log.Println(remote.GetResponseBody(req))
+					res, err := remote.GetResponseBody(req)
+					if err != nil {
+						log.Println("Error getting responseBody", err)
+					} else {
+						log.Println("ResponseBody", string(res))
+					}
 				}()
 			}
 		})

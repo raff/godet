@@ -1,6 +1,7 @@
 package godet
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"log"
 	"sync"
@@ -354,15 +355,17 @@ func (remote *RemoteDebugger) Navigate(url string) error {
 	return err
 }
 
-func (remote *RemoteDebugger) GetResponseBody(req string) (bool, string, error) {
+func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
 	res, err := remote.sendRequest("Network.getResponseBody", Params{
 		"requestId": req,
 	})
 
 	if err != nil {
-		return false, "", err
+		return nil, err
+	} else if res["base64Encoded"].(bool) {
+		return base64.StdEncoding.DecodeString(res["body"].(string))
 	} else {
-		return res["base64Encoded"].(bool), res["body"].(string), nil
+		return []byte(res["body"].(string)), nil
 	}
 }
 

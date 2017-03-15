@@ -207,6 +207,14 @@ loop:
 						log.Println(len(remote.events))
 					}
 
+					remote.Lock()
+					_, ok := remote.callbacks[message.Method]
+					remote.Unlock()
+
+					if !ok {
+						continue // don't queue unrequested events
+					}
+
 					select {
 					case remote.events <- message:
 

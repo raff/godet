@@ -109,7 +109,7 @@ func main() {
 					if err != nil {
 						log.Println("Error getting responseBody", err)
 					} else {
-						log.Println("ResponseBody", string(res))
+						log.Println("ResponseBody", len(res), string(res[:10]))
 					}
 				}()
 			}
@@ -161,6 +161,10 @@ func main() {
 			log.Fatal("error getting document", err)
 		}
 
+		if *verbose {
+			pretty.PrettyPrint(res)
+		}
+
 		doc := simplejson.AsJson(res)
 		id := doc.GetPath("root", "nodeId").MustInt(-1)
 		res, err = remote.QuerySelector(id, *query)
@@ -171,6 +175,12 @@ func main() {
 		if res == nil {
 			log.Println("no result for", *query)
 		} else {
+			id = int(res["nodeId"].(float64))
+			res, err = remote.ResolveNode(id)
+			if err != nil {
+				log.Fatal("error in resolveNode", err)
+			}
+
 			pretty.PrettyPrint(res)
 		}
 	}

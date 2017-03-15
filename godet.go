@@ -380,6 +380,19 @@ func (remote *RemoteDebugger) QuerySelector(nodeId int, selector string) (map[st
 	})
 }
 
+func (remote *RemoteDebugger) QuerySelectorAll(nodeId int, selector string) (map[string]interface{}, error) {
+	return remote.sendRequest("DOM.querySelectorAll", Params{
+		"nodeId":   nodeId,
+		"selector": selector,
+	})
+}
+
+func (remote *RemoteDebugger) ResolveNode(nodeId int) (map[string]interface{}, error) {
+	return remote.sendRequest("DOM.resolveNode", Params{
+		"nodeId": nodeId,
+	})
+}
+
 func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Lock()
 	remote.callbacks[method] = cb

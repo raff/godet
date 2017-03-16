@@ -363,6 +363,14 @@ func (remote *RemoteDebugger) Navigate(url string) error {
 	return err
 }
 
+func (remote *RemoteDebugger) Reload() error {
+	_, err := remote.sendRequest("Page.reload", Params{
+		"ignoreCache": true,
+	})
+
+	return err
+}
+
 func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
 	res, err := remote.sendRequest("Network.getResponseBody", Params{
 		"requestId": req,

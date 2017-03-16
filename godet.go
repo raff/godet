@@ -401,6 +401,31 @@ func (remote *RemoteDebugger) ResolveNode(nodeId int) (map[string]interface{}, e
 	})
 }
 
+func (remote *RemoteDebugger) RequestNode(nodeId int) error {
+	_, err := remote.sendRequest("DOM.requestChildNodes", Params{
+		"nodeId": nodeId,
+	})
+
+	return err
+}
+
+func (remote *RemoteDebugger) Focus(nodeId int) error {
+	_, err := remote.sendRequest("DOM.focus", Params{
+		"nodeId": nodeId,
+	})
+
+	return err
+}
+
+func (remote *RemoteDebugger) SetInputFiles(nodeId int, files []string) error {
+	_, err := remote.sendRequest("DOM.setInputFiles", Params{
+		"nodeId": nodeId,
+		"files":  files,
+	})
+
+	return err
+}
+
 func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Lock()
 	remote.callbacks[method] = cb

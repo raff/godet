@@ -473,6 +473,21 @@ func (remote *RemoteDebugger) SendRune(c rune) error {
 	return err
 }
 
+func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
+	res, err := remote.sendRequest("Runtime.evaluate", Params{
+		"expression":    expr,
+		"returnByValue": true,
+	})
+
+	if err != nil {
+		return nil, err
+	} else if res != nil {
+		return res["result"].(map[string]interface{})["value"], nil
+	} else {
+		return nil, nil
+	}
+}
+
 func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Lock()
 	remote.callbacks[method] = cb

@@ -30,6 +30,7 @@ func main() {
 	responses := flag.Bool("responses", false, "show response notifications")
 	logev := flag.Bool("log", false, "show log/console messages")
 	query := flag.String("query", "", "query against current document")
+	eval := flag.String("eval", "", "evaluate expression")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -179,6 +180,15 @@ func main() {
 
 			pretty.PrettyPrint(res)
 		}
+	}
+
+	if *eval != "" {
+		res, err := remote.Evaluate(*eval)
+		if err != nil {
+			log.Fatal("error in evaluate", err)
+		}
+
+		pretty.PrettyPrint(res)
 	}
 
 	time.Sleep(60 * time.Second)

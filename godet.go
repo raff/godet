@@ -51,6 +51,15 @@ type Tab struct {
 }
 
 //
+// EvaluateError
+//
+type EvaluateError map[string]interface{}
+
+func (err EvaluateError) Error() string {
+	return err["description"].(string)
+}
+
+//
 // RemoteDebugger
 //
 type RemoteDebugger struct {
@@ -481,11 +490,19 @@ func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
 
 	if err != nil {
 		return nil, err
-	} else if res != nil {
-		return res["result"].(map[string]interface{})["value"], nil
-	} else {
+	}
+
+	if res == nil {
 		return nil, nil
 	}
+
+	res = res["result"].(map[string]interface{})
+	if subtype, ok := res["subtype"]; ok && subtype.(string) == "error" {
+		// this is actually an error
+		return nil, EvaluateError(res)
+	}
+
+	return res["value"], nil
 }
 
 func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {

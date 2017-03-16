@@ -135,7 +135,7 @@ func main() {
 
 		tabs, err := remote.TabList("page")
 		if err != nil {
-			log.Fatal("cannot get tabs", err)
+			log.Fatal("cannot get tabs: ", err)
 		}
 
 		if len(tabs) == 0 {
@@ -155,7 +155,7 @@ func main() {
 	if *query != "" {
 		res, err := remote.GetDocument()
 		if err != nil {
-			log.Fatal("error getting document", err)
+			log.Fatal("error getting document: ", err)
 		}
 
 		if *verbose {
@@ -166,7 +166,7 @@ func main() {
 		id := doc.GetPath("root", "nodeId").MustInt(-1)
 		res, err = remote.QuerySelector(id, *query)
 		if err != nil {
-			log.Fatal("error in querySelector", err)
+			log.Fatal("error in querySelector: ", err)
 		}
 
 		if res == nil {
@@ -175,7 +175,7 @@ func main() {
 			id = int(res["nodeId"].(float64))
 			res, err = remote.ResolveNode(id)
 			if err != nil {
-				log.Fatal("error in resolveNode", err)
+				log.Fatal("error in resolveNode: ", err)
 			}
 
 			pretty.PrettyPrint(res)
@@ -185,7 +185,7 @@ func main() {
 	if *eval != "" {
 		res, err := remote.Evaluate(*eval)
 		if err != nil {
-			log.Fatal("error in evaluate", err)
+			log.Fatal("error in evaluate: ", err)
 		}
 
 		pretty.PrettyPrint(res)

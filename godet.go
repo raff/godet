@@ -1,3 +1,6 @@
+// Package godet implements a client to interact with an instance of Chrome via the Remote Debugging Protocol
+//
+// see https://developer.chrome.com/devtools/docs/debugger-protocol
 package godet
 
 import (
@@ -549,6 +552,7 @@ func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
 
 //
 // To evaluate a list of expression, WrapEvaluate wraps them in `(function(){ ... })()`.
+//
 // Use a return statement to return a value.
 //
 func (remote *RemoteDebugger) WrapEvaluate(expr string) (interface{}, error) {

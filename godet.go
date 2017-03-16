@@ -434,6 +434,45 @@ func (remote *RemoteDebugger) SetInputFiles(nodeId int, files []string) error {
 	return err
 }
 
+func (remote *RemoteDebugger) SetAttributeValue(nodeId int, name, value string) error {
+	_, err := remote.sendRequest("DOM.setAttributeValue", Params{
+		"nodeId": nodeId,
+		"name":   name,
+		"value":  value,
+	})
+
+	return err
+}
+
+func (remote *RemoteDebugger) SendRune(c rune) error {
+	if _, err := remote.sendRequest("Input.dispatchKeyEvent", Params{
+		"type":                  "rawKeyDown",
+		"windowsVirtualKeyCode": int(c),
+		"nativeVirtualKeyCode":  int(c),
+		"unmodifiedText":        string(c),
+		"text":                  string(c),
+	}); err != nil {
+		return err
+	}
+	if _, err := remote.sendRequest("Input.dispatchKeyEvent", Params{
+		"type":                  "char",
+		"windowsVirtualKeyCode": int(c),
+		"nativeVirtualKeyCode":  int(c),
+		"unmodifiedText":        string(c),
+		"text":                  string(c),
+	}); err != nil {
+		return err
+	}
+	_, err := remote.sendRequest("Input.dispatchKeyEvent", Params{
+		"type":                  "keyUp",
+		"windowsVirtualKeyCode": int(c),
+		"nativeVirtualKeyCode":  int(c),
+		"unmodifiedText":        string(c),
+		"text":                  string(c),
+	})
+	return err
+}
+
 func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Lock()
 	remote.callbacks[method] = cb

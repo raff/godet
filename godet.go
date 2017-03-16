@@ -1,6 +1,6 @@
-// Package godet implements a client to interact with an instance of Chrome via the Remote Debugging Protocol
+// Package godet implements a client to interact with an instance of Chrome via the Remote Debugging Protocol.
 //
-// see https://developer.chrome.com/devtools/docs/debugger-protocol
+// See https://developer.chrome.com/devtools/docs/debugger-protocol
 package godet
 
 import (

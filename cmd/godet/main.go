@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"os/exec"
+	"runtime"
 	"time"
 
 	"github.com/gobs/args"
@@ -19,7 +20,21 @@ func runCommand(commandString string) error {
 }
 
 func main() {
-	cmd := flag.String("cmd", "open /Applications/Google\\ Chrome.app --args --remote-debugging-port=9222 --disable-extensions --headless about:blank", "command to execute to start the browser")
+	var chromeapp string
+
+	switch runtime.GOOS {
+	case "darwin":
+		chromeapp = "open /Applications/Google\\ Chrome.app --args"
+	case "linux":
+                chromeapp = "chromium"
+	case "windows":
+	}
+
+	if chromeapp != "" {
+		chromeapp += " --remote-debugging-port=9222 --disable-extensions --headless about:blank"
+	}
+
+	cmd := flag.String("cmd", chromeapp, "command to execute to start the browser")
 	port := flag.String("port", "localhost:9222", "Chrome remote debugger port")
 	verbose := flag.Bool("verbose", false, "verbose logging")
 	version := flag.Bool("version", false, "display remote devtools version")

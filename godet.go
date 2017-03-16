@@ -51,7 +51,7 @@ type Tab struct {
 }
 
 //
-// EvaluateError
+// returned by Evaluate if something is wrong with the expression
 //
 type EvaluateError map[string]interface{}
 
@@ -60,7 +60,7 @@ func (err EvaluateError) Error() string {
 }
 
 //
-// RemoteDebugger
+// RemoteDebugger implements an interface with Chrome DevTools
 //
 type RemoteDebugger struct {
 	http    *httpclient.HttpClient
@@ -359,11 +359,17 @@ func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
 	return &tab, nil
 }
 
+//
+// Get the list of available DevTools domains
+//
 func (remote *RemoteDebugger) GetDomains() (map[string]interface{}, error) {
 	res, err := remote.sendRequest("Schema.getDomains", nil)
 	return res, err
 }
 
+//
+// Navigate to specified URL
+//
 func (remote *RemoteDebugger) Navigate(url string) error {
 	_, err := remote.sendRequest("Page.navigate", Params{
 		"url": url,
@@ -372,6 +378,9 @@ func (remote *RemoteDebugger) Navigate(url string) error {
 	return err
 }
 
+//
+// Reload current page
+//
 func (remote *RemoteDebugger) Reload() error {
 	_, err := remote.sendRequest("Page.reload", Params{
 		"ignoreCache": true,
@@ -380,6 +389,9 @@ func (remote *RemoteDebugger) Reload() error {
 	return err
 }
 
+//
+// Given a requestId (from the Network.responseReceived payload) returns the response body
+//
 func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
 	res, err := remote.sendRequest("Network.getResponseBody", Params{
 		"requestId": req,
@@ -394,10 +406,16 @@ func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
 	}
 }
 
+//
+// Get the "Document" object as a devtool node
+//
 func (remote *RemoteDebugger) GetDocument() (map[string]interface{}, error) {
 	return remote.sendRequest("DOM.getDocument", nil)
 }
 
+//
+// Get the nodeId for specified selector
+//
 func (remote *RemoteDebugger) QuerySelector(nodeId int, selector string) (map[string]interface{}, error) {
 	return remote.sendRequest("DOM.querySelector", Params{
 		"nodeId":   nodeId,
@@ -405,6 +423,9 @@ func (remote *RemoteDebugger) QuerySelector(nodeId int, selector string) (map[st
 	})
 }
 
+//
+// Get a list of nodeId for the specified selectors
+//
 func (remote *RemoteDebugger) QuerySelectorAll(nodeId int, selector string) (map[string]interface{}, error) {
 	return remote.sendRequest("DOM.querySelectorAll", Params{
 		"nodeId":   nodeId,
@@ -412,12 +433,18 @@ func (remote *RemoteDebugger) QuerySelectorAll(nodeId int, selector string) (map
 	})
 }
 
+//
+// ResolveNode returns some information about the node
+//
 func (remote *RemoteDebugger) ResolveNode(nodeId int) (map[string]interface{}, error) {
 	return remote.sendRequest("DOM.resolveNode", Params{
 		"nodeId": nodeId,
 	})
 }
 
+//
+// Request a node. The response is generated as a DOM.setChildNodes event.
+//
 func (remote *RemoteDebugger) RequestNode(nodeId int) error {
 	_, err := remote.sendRequest("DOM.requestChildNodes", Params{
 		"nodeId": nodeId,
@@ -426,6 +453,9 @@ func (remote *RemoteDebugger) RequestNode(nodeId int) error {
 	return err
 }
 
+//
+// Set focus on specified node
+//
 func (remote *RemoteDebugger) Focus(nodeId int) error {
 	_, err := remote.sendRequest("DOM.focus", Params{
 		"nodeId": nodeId,
@@ -434,6 +464,9 @@ func (remote *RemoteDebugger) Focus(nodeId int) error {
 	return err
 }
 
+//
+// Attach input files to specified node (an input[type=file] element ?)
+//
 func (remote *RemoteDebugger) SetInputFiles(nodeId int, files []string) error {
 	_, err := remote.sendRequest("DOM.setInputFiles", Params{
 		"nodeId": nodeId,
@@ -443,6 +476,9 @@ func (remote *RemoteDebugger) SetInputFiles(nodeId int, files []string) error {
 	return err
 }
 
+//
+// Set the attribute with specified name and value
+//
 func (remote *RemoteDebugger) SetAttributeValue(nodeId int, name, value string) error {
 	_, err := remote.sendRequest("DOM.setAttributeValue", Params{
 		"nodeId": nodeId,
@@ -453,6 +489,9 @@ func (remote *RemoteDebugger) SetAttributeValue(nodeId int, name, value string) 
 	return err
 }
 
+//
+// Send a character as keyboard input
+//
 func (remote *RemoteDebugger) SendRune(c rune) error {
 	if _, err := remote.sendRequest("Input.dispatchKeyEvent", Params{
 		"type":                  "rawKeyDown",
@@ -482,6 +521,9 @@ func (remote *RemoteDebugger) SendRune(c rune) error {
 	return err
 }
 
+//
+// Evaluate javascript function in the context of the current page
+//
 func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
 	res, err := remote.sendRequest("Runtime.evaluate", Params{
 		"expression":    expr,
@@ -505,13 +547,28 @@ func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
 	return res["value"], nil
 }
 
+//
+// To evaluate a list of expression, WrapEvaluate wraps them in `(function(){ ... })()`.
+// Use a return statement to return a value.
+//
+func (remote *RemoteDebugger) WrapEvaluate(expr string) (interface{}, error) {
+	expr := fmt.Sprintf("(function(){%v})()", expr)
+	return remote.Evaluate(expr)
+}
+
+//
+// Set a callback for the specified event
+//
 func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Lock()
 	remote.callbacks[method] = cb
 	remote.Unlock()
 }
 
-func (remote *RemoteDebugger) domainEvents(domain string, enable bool) error {
+//
+// Enable listening to events in the specified domain
+//
+func (remote *RemoteDebugger) DomainEvents(domain string, enable bool) error {
 	method := domain
 
 	if enable {
@@ -524,22 +581,37 @@ func (remote *RemoteDebugger) domainEvents(domain string, enable bool) error {
 	return err
 }
 
+//
+// Enable listenting to DOM events
+//
 func (remote *RemoteDebugger) DOMEvents(enable bool) error {
-	return remote.domainEvents("DOM", enable)
+	return remote.DomainEvents("DOM", enable)
 }
 
+//
+// Enable listenting to Page events
+//
 func (remote *RemoteDebugger) PageEvents(enable bool) error {
-	return remote.domainEvents("Page", enable)
+	return remote.DomainEvents("Page", enable)
 }
 
+//
+// Enable listenting to Network events
+//
 func (remote *RemoteDebugger) NetworkEvents(enable bool) error {
-	return remote.domainEvents("Network", enable)
+	return remote.DomainEvents("Network", enable)
 }
 
+//
+// Enable listenting to Runtime events
+//
 func (remote *RemoteDebugger) RuntimeEvents(enable bool) error {
-	return remote.domainEvents("Runtime", enable)
+	return remote.DomainEvents("Runtime", enable)
 }
 
+//
+// Enable listenting to Log events
+//
 func (remote *RemoteDebugger) LogEvents(enable bool) error {
-	return remote.domainEvents("Log", enable)
+	return remote.DomainEvents("Log", enable)
 }

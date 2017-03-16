@@ -507,3 +507,7 @@ func (remote *RemoteDebugger) NetworkEvents(enable bool) error {
 func (remote *RemoteDebugger) RuntimeEvents(enable bool) error {
 	return remote.domainEvents("Runtime", enable)
 }
+
+func (remote *RemoteDebugger) LogEvents(enable bool) error {
+	return remote.domainEvents("Log", enable)
+}

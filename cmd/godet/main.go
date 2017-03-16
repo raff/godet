@@ -28,7 +28,7 @@ func main() {
 	domains := flag.Bool("domains", false, "show list of available domains")
 	requests := flag.Bool("requests", false, "show request notifications")
 	responses := flag.Bool("responses", false, "show response notifications")
-	console := flag.Bool("console", false, "show console messages")
+	logev := flag.Bool("log", false, "show log/console messages")
 	query := flag.String("query", "", "query against current document")
 	flag.Parse()
 
@@ -116,15 +116,10 @@ func main() {
 		})
 	}
 
-	if *console {
-		remote.CallbackEvent("Runtime.consoleAPICalled", func(params godet.Params) {
-			args := []interface{}{"CONSOLE", params["type"]}
-
-			for _, arg := range params["args"].([]interface{}) {
-				args = append(args, arg.(map[string]interface{})["value"])
-			}
-
-			log.Println(args...)
+	if *logev {
+		remote.CallbackEvent("Log.entryAdded", func(params godet.Params) {
+			entry := params["entry"].(map[string]interface{})
+			log.Println("LOG", entry["level"], entry["type"], entry["text"])
 		})
 	}
 
@@ -132,6 +127,7 @@ func main() {
 	remote.NetworkEvents(true)
 	remote.PageEvents(true)
 	remote.DOMEvents(true)
+	remote.LogEvents(true)
 
 	if flag.NArg() > 0 {
 		p := flag.Arg(0)

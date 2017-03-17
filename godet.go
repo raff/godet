@@ -6,12 +6,16 @@ package godet
 import (
 	"encoding/base64"
 	"encoding/json"
-        "fmt"
+	"fmt"
 	"log"
 	"sync"
 
 	"github.com/gobs/httpclient"
 	"github.com/gorilla/websocket"
+)
+
+const (
+	EventClosed = "RemoteDebugger.closed"
 )
 
 func decode(resp *httpclient.HttpResponse, v interface{}) error {
@@ -254,6 +258,7 @@ loop:
 		}
 	}
 
+	remote.events <- wsMessage{Method: EventClosed, Params: []byte("{}")}
 	close(remote.events)
 }
 

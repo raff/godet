@@ -26,7 +26,7 @@ func main() {
 	case "darwin":
 		chromeapp = "open /Applications/Google\\ Chrome.app --args"
 	case "linux":
-                chromeapp = "chromium"
+		chromeapp = "chromium"
 	case "windows":
 	}
 
@@ -76,6 +76,8 @@ func main() {
 
 	defer remote.Close()
 
+	done := make(chan bool)
+
 	if *version {
 		v, err := remote.Version()
 		if err != nil {
@@ -102,6 +104,11 @@ func main() {
 
 		pretty.PrettyPrint(d)
 	}
+
+	remote.CallbackEvent(godet.EventClosed, func(params godet.Params) {
+		log.Println("RemoteDebugger connection terminated.")
+		done <- true
+	})
 
 	if *requests {
 		remote.CallbackEvent("Network.requestWillBeSent", func(params godet.Params) {
@@ -198,7 +205,7 @@ func main() {
 	}
 
 	if *eval != "" {
-		res, err := remote.Evaluate(*eval)
+		res, err := remote.EvaluateWrap(*eval)
 		if err != nil {
 			log.Fatal("error in evaluate: ", err)
 		}
@@ -206,6 +213,6 @@ func main() {
 		pretty.PrettyPrint(res)
 	}
 
-	time.Sleep(60 * time.Second)
+	<-done
 	log.Println("Closing")
 }

@@ -6,6 +6,7 @@ package godet
 import (
 	"encoding/base64"
 	"encoding/json"
+        "fmt"
 	"log"
 	"sync"
 
@@ -551,12 +552,12 @@ func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
 }
 
 //
-// To evaluate a list of expression, WrapEvaluate wraps them in `(function(){ ... })()`.
+// To evaluate a list of expression, EvaluateWrap wraps them in `(function(){ ... })()`.
 //
 // Use a return statement to return a value.
 //
-func (remote *RemoteDebugger) WrapEvaluate(expr string) (interface{}, error) {
-	expr := fmt.Sprintf("(function(){%v})()", expr)
+func (remote *RemoteDebugger) EvaluateWrap(expr string) (interface{}, error) {
+	expr = fmt.Sprintf("(function(){%v})()", expr)
 	return remote.Evaluate(expr)
 }
 

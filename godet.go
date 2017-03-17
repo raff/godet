@@ -29,7 +29,7 @@ func unmarshal(payload []byte) (map[string]interface{}, error) {
 	var response map[string]interface{}
 	err := json.Unmarshal(payload, &response)
 	if err != nil {
-		log.Println("error unmarshaling", string(payload), len(payload), err)
+		log.Println("unmarshal", string(payload), len(payload), err)
 	}
 	return response, err
 }
@@ -181,7 +181,7 @@ func (remote *RemoteDebugger) sendMessages() {
 	for message := range remote.requests {
 		bytes, err := json.Marshal(message)
 		if err != nil {
-			log.Println("error marshaling message", err)
+			log.Println("marshal", message, err)
 			continue
 		}
 
@@ -191,7 +191,7 @@ func (remote *RemoteDebugger) sendMessages() {
 
 		err = remote.ws.WriteMessage(websocket.TextMessage, bytes)
 		if err != nil {
-			log.Println("error sending message", err)
+			log.Println("write message", err)
 		}
 	}
 }
@@ -206,7 +206,7 @@ loop:
 		default:
 			_, bytes, err := remote.ws.ReadMessage()
 			if err != nil {
-				log.Println("read error", err)
+				log.Println("read message", err)
 				if websocket.IsUnexpectedCloseError(err) {
 					break loop
 				}
@@ -217,11 +217,10 @@ loop:
 				// unmarshall message
 				//
 				if err := json.Unmarshal(bytes, &message); err != nil {
-					log.Println("error unmarshaling", string(bytes), len(bytes), err)
+					log.Println("unmarshal", string(bytes), len(bytes), err)
 				} else if message.Method != "" {
 					if remote.verbose {
-						log.Println("EVENT", message.Method, string(message.Params))
-						log.Println(len(remote.events))
+						log.Println("EVENT", message.Method, string(message.Params), len(remote.events))
 					}
 
 					remote.Lock()
@@ -271,7 +270,7 @@ func (remote *RemoteDebugger) processEvents() {
 		if cb != nil {
 			var params Params
 			if err := json.Unmarshal(ev.Params, &params); err != nil {
-				log.Println("error unmarshaling", string(ev.Params), len(ev.Params), err)
+				log.Println("unmarshal", string(ev.Params), len(ev.Params), err)
 			} else {
 				cb(params)
 			}

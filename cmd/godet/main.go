@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os/exec"
 	"runtime"
@@ -142,7 +143,44 @@ func main() {
 	if *logev {
 		remote.CallbackEvent("Log.entryAdded", func(params godet.Params) {
 			entry := params["entry"].(map[string]interface{})
-			log.Println("LOG", entry["level"], entry["type"], entry["text"])
+			log.Println("LOG", entry["type"], entry["level"], entry["text"])
+		})
+
+		remote.CallbackEvent("Runtime.consoleAPICalled", func(params godet.Params) {
+			l := []interface{}{"CONSOLE", params["type"].(string)}
+
+			for _, a := range params["args"].([]interface{}) {
+				arg := a.(map[string]interface{})
+
+				if arg["value"] != nil {
+					l = append(l, arg["value"])
+				} else if arg["preview"] != nil {
+					arg := arg["preview"].(map[string]interface{})
+
+					v := arg["description"].(string) + "{"
+
+					for i, p := range arg["properties"].([]interface{}) {
+						if i > 0 {
+							v += ", "
+						}
+
+						prop := p.(map[string]interface{})
+						if prop["name"] != nil {
+							v += fmt.Sprintf("%q: ", prop["name"])
+						}
+
+						v += fmt.Sprintf("%v", prop["value"])
+					}
+
+					v += "}"
+					l = append(l, v)
+				} else {
+					l = append(l, arg["type"].(string))
+				}
+
+			}
+
+			log.Println(l...)
 		})
 	}
 

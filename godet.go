@@ -15,6 +15,7 @@ import (
 )
 
 const (
+	// EventClosed represents the "RemoteDebugger.closed" event.
 	EventClosed = "RemoteDebugger.closed"
 )
 
@@ -34,9 +35,7 @@ func unmarshal(payload []byte) (map[string]interface{}, error) {
 	return response, err
 }
 
-//
-// DevTools version info
-//
+// Version holds the DevTools version information.
 type Version struct {
 	Browser         string `json:"Browser"`
 	ProtocolVersion string `json:"Protocol-Version"`
@@ -45,35 +44,29 @@ type Version struct {
 	WebKitVersion   string `json:"WebKit-Version"`
 }
 
-//
-// Chrome open tab or page
-//
+// Tab represents an opened tab/page.
 type Tab struct {
-	Id          string `json:"id"`
+	ID          string `json:"id"`
 	Type        string `json:"type"`
 	Description string `json:"description"`
 	Title       string `json:"title"`
-	Url         string `json:"url"`
-	WsUrl       string `json:"webSocketDebuggerUrl"`
-	DevUrl      string `json:"devtoolsFrontendUrl"`
+	URL         string `json:"url"`
+	WsURL       string `json:"webSocketDebuggerUrl"`
+	DevURL      string `json:"devtoolsFrontendUrl"`
 }
 
-//
-// returned by Evaluate if something is wrong with the expression
-//
+// EvaluateError is returned by Evaluate in case of expression errors.
 type EvaluateError map[string]interface{}
 
 func (err EvaluateError) Error() string {
 	return err["description"].(string)
 }
 
-//
-// RemoteDebugger implements an interface with Chrome DevTools
-//
+// RemoteDebugger implements an interface for Chrome DevTools.
 type RemoteDebugger struct {
 	http    *httpclient.HttpClient
 	ws      *websocket.Conn
-	reqid   int
+	reqID   int
 	verbose bool
 
 	sync.Mutex
@@ -85,12 +78,13 @@ type RemoteDebugger struct {
 	events    chan wsMessage
 }
 
+// Params is a type alias for the event params structure.
 type Params map[string]interface{}
+
+// EventCallback represents a callback event, associated with a method.
 type EventCallback func(params Params)
 
-//
-// Connect to the remote debugger and return `RemoteDebugger` object
-//
+// Connect to the remote debugger and return `RemoteDebugger` object.
 func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 	remote := &RemoteDebugger{
 		http:      httpclient.NewHttpClient("http://" + port),
@@ -110,22 +104,22 @@ func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 		return nil, err
 	}
 
-	getWsUrl := func() string {
+	getWsURL := func() string {
 		for _, tab := range tabs {
-			if tab.WsUrl != "" {
-				return tab.WsUrl
+			if tab.WsURL != "" {
+				return tab.WsURL
 			}
 		}
 
 		return "ws://" + port + "/devtools/page/00000000-0000-0000-0000-000000000000"
 	}
 
-	wsUrl := getWsUrl()
+	wsURL := getWsURL()
 
 	// check websocket connection
-	if remote.ws, _, err = websocket.DefaultDialer.Dial(wsUrl, nil); err != nil {
+	if remote.ws, _, err = websocket.DefaultDialer.Dial(wsURL, nil); err != nil {
 		if verbose {
-			log.Println("dial", wsUrl, "error", err)
+			log.Println("dial", wsURL, "error", err)
 		}
 		return nil, err
 	}
@@ -136,6 +130,7 @@ func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 	return remote, nil
 }
 
+// Close the RemoteDebugger connection.
 func (remote *RemoteDebugger) Close() error {
 	close(remote.closed)
 	err := remote.ws.Close()
@@ -143,7 +138,7 @@ func (remote *RemoteDebugger) Close() error {
 }
 
 type wsMessage struct {
-	Id     int             `json:"id"`
+	ID     int             `json:"id"`
 	Result json.RawMessage `json:"result"`
 
 	Method string          `json:"Method"`
@@ -152,22 +147,22 @@ type wsMessage struct {
 
 func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[string]interface{}, error) {
 	remote.Lock()
-	reqid := remote.reqid
-	remote.responses[reqid] = make(chan json.RawMessage, 1)
-	remote.reqid++
+	reqID := remote.reqID
+	remote.responses[reqID] = make(chan json.RawMessage, 1)
+	remote.reqID++
 	remote.Unlock()
 
 	command := Params{
-		"id":     reqid,
+		"id":     reqID,
 		"method": method,
 		"params": params,
 	}
 
 	remote.requests <- command
 
-	reply := <-remote.responses[reqid]
+	reply := <-remote.responses[reqID]
 	remote.Lock()
-	remote.responses[reqid] = nil
+	remote.responses[reqID] = nil
 	remote.Unlock()
 
 	if reply != nil {
@@ -242,11 +237,11 @@ loop:
 					// should be a method reply
 					//
 					if remote.verbose {
-						log.Println("REPLY", message.Id, string(message.Result))
+						log.Println("REPLY", message.ID, string(message.Result))
 					}
 
 					remote.Lock()
-					ch := remote.responses[message.Id]
+					ch := remote.responses[message.ID]
 					remote.Unlock()
 
 					if ch != nil {
@@ -278,9 +273,7 @@ func (remote *RemoteDebugger) processEvents() {
 	}
 }
 
-//
-// Return various version info (protocol, browser, etc.)
-//
+// Version returns version information (protocol, browser, etc.).
 func (remote *RemoteDebugger) Version() (*Version, error) {
 	resp, err := remote.http.Get("/json/version", nil, nil)
 	if err != nil {
@@ -296,11 +289,8 @@ func (remote *RemoteDebugger) Version() (*Version, error) {
 	return &version, nil
 }
 
-//
-// Return the list of open tabs/page
-//
+// TabList returns a list of opened tabs/pages.
 // If filter is not empty only tabs of the specified type are returned (i.e. "page")
-//
 func (remote *RemoteDebugger) TabList(filter string) ([]*Tab, error) {
 	resp, err := remote.http.Get("/json/list", nil, nil)
 	if err != nil {
@@ -328,27 +318,21 @@ func (remote *RemoteDebugger) TabList(filter string) ([]*Tab, error) {
 	return filtered, nil
 }
 
-//
-// Activate specified tab
-//
+// ActivateTab activates the specified tab.
 func (remote *RemoteDebugger) ActivateTab(tab *Tab) error {
-	resp, err := remote.http.Get("/json/activate/"+tab.Id, nil, nil)
+	resp, err := remote.http.Get("/json/activate/"+tab.ID, nil, nil)
 	resp.Close()
 	return err
 }
 
-//
-// Close specified tab
-//
+// CloseTab closes the specified tab.
 func (remote *RemoteDebugger) CloseTab(tab *Tab) error {
-	resp, err := remote.http.Get("/json/close/"+tab.Id, nil, nil)
+	resp, err := remote.http.Get("/json/close/"+tab.ID, nil, nil)
 	resp.Close()
 	return err
 }
 
-//
-// Create a new tab
-//
+// NewTab creates a new tab.
 func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
 	params := Params{}
 	if url != "" {
@@ -367,17 +351,13 @@ func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
 	return &tab, nil
 }
 
-//
-// Get the list of available DevTools domains
-//
+// GetDomains lists the available DevTools domains.
 func (remote *RemoteDebugger) GetDomains() (map[string]interface{}, error) {
 	res, err := remote.sendRequest("Schema.getDomains", nil)
 	return res, err
 }
 
-//
-// Navigate to specified URL
-//
+// Navigate navigates to the specified URL.
 func (remote *RemoteDebugger) Navigate(url string) error {
 	_, err := remote.sendRequest("Page.navigate", Params{
 		"url": url,
@@ -386,9 +366,7 @@ func (remote *RemoteDebugger) Navigate(url string) error {
 	return err
 }
 
-//
-// Reload current page
-//
+// Reload reloads the current page.
 func (remote *RemoteDebugger) Reload() error {
 	_, err := remote.sendRequest("Page.reload", Params{
 		"ignoreCache": true,
@@ -397,9 +375,7 @@ func (remote *RemoteDebugger) Reload() error {
 	return err
 }
 
-//
-// Given a requestId (from the Network.responseReceived payload) returns the response body
-//
+// GetResponseBody returns the response body of a given requestId (from the Network.responseReceived payload).
 func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
 	res, err := remote.sendRequest("Network.getResponseBody", Params{
 		"requestId": req,
@@ -414,82 +390,66 @@ func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
 	}
 }
 
-//
-// Get the "Document" object as a devtool node
-//
+// GetDocument gets the "Document" object as a DevTool node.
 func (remote *RemoteDebugger) GetDocument() (map[string]interface{}, error) {
 	return remote.sendRequest("DOM.getDocument", nil)
 }
 
-//
-// Get the nodeId for specified selector
-//
-func (remote *RemoteDebugger) QuerySelector(nodeId int, selector string) (map[string]interface{}, error) {
+// QuerySelector gets the nodeId for a specified selector.
+func (remote *RemoteDebugger) QuerySelector(nodeID int, selector string) (map[string]interface{}, error) {
 	return remote.sendRequest("DOM.querySelector", Params{
-		"nodeId":   nodeId,
+		"nodeId":   nodeID,
 		"selector": selector,
 	})
 }
 
-//
-// Get a list of nodeId for the specified selectors
-//
-func (remote *RemoteDebugger) QuerySelectorAll(nodeId int, selector string) (map[string]interface{}, error) {
+// QuerySelectorAll gets a list of nodeId for the specified selectors.
+func (remote *RemoteDebugger) QuerySelectorAll(nodeID int, selector string) (map[string]interface{}, error) {
 	return remote.sendRequest("DOM.querySelectorAll", Params{
-		"nodeId":   nodeId,
+		"nodeId":   nodeID,
 		"selector": selector,
 	})
 }
 
-//
-// ResolveNode returns some information about the node
-//
-func (remote *RemoteDebugger) ResolveNode(nodeId int) (map[string]interface{}, error) {
+// ResolveNode returns some information about the node.
+func (remote *RemoteDebugger) ResolveNode(nodeID int) (map[string]interface{}, error) {
 	return remote.sendRequest("DOM.resolveNode", Params{
-		"nodeId": nodeId,
+		"nodeId": nodeID,
 	})
 }
 
-//
-// Request a node. The response is generated as a DOM.setChildNodes event.
-//
-func (remote *RemoteDebugger) RequestNode(nodeId int) error {
+// RequestNode requests a node, the response is generated as a DOM.setChildNodes event.
+func (remote *RemoteDebugger) RequestNode(nodeID int) error {
 	_, err := remote.sendRequest("DOM.requestChildNodes", Params{
-		"nodeId": nodeId,
+		"nodeId": nodeID,
 	})
 
 	return err
 }
 
-//
-// Set focus on specified node
-//
-func (remote *RemoteDebugger) Focus(nodeId int) error {
+// Focus sets focus on a specified node.
+func (remote *RemoteDebugger) Focus(nodeID int) error {
 	_, err := remote.sendRequest("DOM.focus", Params{
-		"nodeId": nodeId,
+		"nodeId": nodeID,
 	})
 
 	return err
 }
 
-//
-// Attach input files to specified node (an input[type=file] element ?)
-//
-func (remote *RemoteDebugger) SetInputFiles(nodeId int, files []string) error {
+// SetInputFiles attaches input files to a specified node (an input[type=file] element?).
+func (remote *RemoteDebugger) SetInputFiles(nodeID int, files []string) error {
 	_, err := remote.sendRequest("DOM.setInputFiles", Params{
-		"nodeId": nodeId,
+		"nodeId": nodeID,
 		"files":  files,
 	})
 
 	return err
 }
 
-//
-// Set the attribute with specified name and value
-//
-func (remote *RemoteDebugger) SetAttributeValue(nodeId int, name, value string) error {
+// SetAttributeValue sets the value for a specified attribute.
+func (remote *RemoteDebugger) SetAttributeValue(nodeID int, name, value string) error {
 	_, err := remote.sendRequest("DOM.setAttributeValue", Params{
-		"nodeId": nodeId,
+		"nodeId": nodeID,
 		"name":   name,
 		"value":  value,
 	})
@@ -497,11 +457,9 @@ func (remote *RemoteDebugger) SetAttributeValue(nodeId int, name, value string) 
 	return err
 }
 
-//
-// Send a character as keyboard input
-//
-func (remote *RemoteDebugger) SendRune(c rune) error {
-	if _, err := remote.sendRequest("Input.dispatchKeyEvent", Params{
+// SendRune sends a character as keyboard input.
+func (remote *RemoteDebugger) SendRune(c rune) (err error) {
+	if _, err = remote.sendRequest("Input.dispatchKeyEvent", Params{
 		"type":                  "rawKeyDown",
 		"windowsVirtualKeyCode": int(c),
 		"nativeVirtualKeyCode":  int(c),
@@ -519,7 +477,7 @@ func (remote *RemoteDebugger) SendRune(c rune) error {
 	}); err != nil {
 		return err
 	}
-	_, err := remote.sendRequest("Input.dispatchKeyEvent", Params{
+	_, err = remote.sendRequest("Input.dispatchKeyEvent", Params{
 		"type":                  "keyUp",
 		"windowsVirtualKeyCode": int(c),
 		"nativeVirtualKeyCode":  int(c),
@@ -529,9 +487,7 @@ func (remote *RemoteDebugger) SendRune(c rune) error {
 	return err
 }
 
-//
-// Evaluate javascript function in the context of the current page
-//
+// Evaluate evalutes a Javascript function in the context of the current page.
 func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
 	res, err := remote.sendRequest("Runtime.evaluate", Params{
 		"expression":    expr,
@@ -555,28 +511,21 @@ func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
 	return res["value"], nil
 }
 
-//
-// To evaluate a list of expression, EvaluateWrap wraps them in `(function(){ ... })()`.
-//
+// EvaluateWrap evaluates a list of expressions, EvaluateWrap wraps them in `(function(){ ... })()`.
 // Use a return statement to return a value.
-//
 func (remote *RemoteDebugger) EvaluateWrap(expr string) (interface{}, error) {
 	expr = fmt.Sprintf("(function(){%v})()", expr)
 	return remote.Evaluate(expr)
 }
 
-//
-// Set a callback for the specified event
-//
+// CallbackEvent sets a callback for the specified event.
 func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Lock()
 	remote.callbacks[method] = cb
 	remote.Unlock()
 }
 
-//
-// Enable listening to events in the specified domain
-//
+// DomainEvents enables event listening in the specified domain.
 func (remote *RemoteDebugger) DomainEvents(domain string, enable bool) error {
 	method := domain
 
@@ -590,37 +539,27 @@ func (remote *RemoteDebugger) DomainEvents(domain string, enable bool) error {
 	return err
 }
 
-//
-// Enable listenting to DOM events
-//
+// DOMEvents enables DOM events listening.
 func (remote *RemoteDebugger) DOMEvents(enable bool) error {
 	return remote.DomainEvents("DOM", enable)
 }
 
-//
-// Enable listenting to Page events
-//
+// PageEvents enables Page events listening.
 func (remote *RemoteDebugger) PageEvents(enable bool) error {
 	return remote.DomainEvents("Page", enable)
 }
 
-//
-// Enable listenting to Network events
-//
+// NetworkEvents enables Network events listening.
 func (remote *RemoteDebugger) NetworkEvents(enable bool) error {
 	return remote.DomainEvents("Network", enable)
 }
 
-//
-// Enable listenting to Runtime events
-//
+// RuntimeEvents enables Runtime events listening.
 func (remote *RemoteDebugger) RuntimeEvents(enable bool) error {
 	return remote.DomainEvents("Runtime", enable)
 }
 
-//
-// Enable listenting to Log events
-//
+// LogEvents enables Log events listening.
 func (remote *RemoteDebugger) LogEvents(enable bool) error {
 	return remote.DomainEvents("Log", enable)
 }

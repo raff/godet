@@ -26,13 +26,22 @@ func main() {
 	switch runtime.GOOS {
 	case "darwin":
 		chromeapp = "open /Applications/Google\\ Chrome.app --args"
+
 	case "linux":
-		chromeapp = "chromium"
+		for _, c := range []string{"chromium",
+			"google-chrome-beta",
+			"google-chrome-unstable",
+			"google-chrome-stable"} {
+			if _, err := exec.LookPath(c); err == nil {
+				chromeapp = c
+			}
+		}
+
 	case "windows":
 	}
 
 	if chromeapp != "" {
-		chromeapp += " --remote-debugging-port=9222 --disable-extensions --headless about:blank"
+		chromeapp += " --remote-debugging-port=9222 --disable-extensions --disable-gpu --headless about:blank"
 	}
 
 	cmd := flag.String("cmd", chromeapp, "command to execute to start the browser")
@@ -79,13 +88,15 @@ func main() {
 
 	done := make(chan bool)
 
-	if *version {
-		v, err := remote.Version()
-		if err != nil {
-			log.Fatal("cannot get version: ", err)
-		}
+	v, err := remote.Version()
+	if err != nil {
+		log.Fatal("cannot get version: ", err)
+	}
 
+	if *version {
 		pretty.PrettyPrint(v)
+	} else {
+		log.Println("connected to", v.Browser, ", protocol v.", v.ProtocolVersion)
 	}
 
 	if *listtabs {

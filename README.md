@@ -11,6 +11,7 @@ http://godoc.org/github.com/raff/godet
 ## Example
 A pretty complete example is available at `cmd/godet/main.go`
 
+```go
     import "github.com/raff/godet"
 
     // connect to Chrome instance
@@ -71,3 +72,4 @@ A pretty complete example is available at `cmd/godet/main.go`
     `)
 
     fmt.Println(res)
+```

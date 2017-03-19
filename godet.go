@@ -518,6 +518,14 @@ func (remote *RemoteDebugger) EvaluateWrap(expr string) (interface{}, error) {
 	return remote.Evaluate(expr)
 }
 
+// SetUserAgent overrides the default user agent.
+func (remote *RemoteDebugger) SetUserAgent(userAgent string) error {
+	_, err := remote.sendRequest("Network.setUserAgentOverride", Params{
+		"userAgent": userAgent,
+	})
+	return err
+}
+
 // CallbackEvent sets a callback for the specified event.
 func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Lock()

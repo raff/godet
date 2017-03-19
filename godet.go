@@ -55,6 +55,26 @@ type Tab struct {
 	DevURL      string `json:"devtoolsFrontendUrl"`
 }
 
+// Profile represents a profile data structure.
+type Profile struct {
+	Nodes      []ProfileNode `json:"nodes"`
+	StartTime  int64         `json:"startTime"`
+	EndTime    int64         `json:"endTime"`
+	Samples    []int64       `json:"samples"`
+	TimeDeltas []int64       `json:"timeDeltas"`
+}
+
+// ProfileNode represents a profile node data structure.
+// The experimental fields are kept as json.RawMessage, so you may decode them with your own code, see: https://chromedevtools.github.io/debugger-protocol-viewer/tot/Profiler/
+type ProfileNode struct {
+	ID            int64           `json:"id"`
+	CallFrame     json.RawMessage `json:"callFrame"`
+	HitCount      int64           `json:"hitCount"`
+	Children      []int64         `json:"children"`
+	DeoptReason   string          `json:"deoptReason"`
+	PositionTicks json.RawMessage `json:"positionTicks"`
+}
+
 // EvaluateError is returned by Evaluate in case of expression errors.
 type EvaluateError map[string]interface{}
 
@@ -145,7 +165,18 @@ type wsMessage struct {
 	Params json.RawMessage `json:"Params"`
 }
 
+// sendRequest sends a request and returns the reply as a a map.
 func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[string]interface{}, error) {
+	rawReply, err := remote.sendRawReplyRequest(method, params)
+	if err != nil || rawReply == nil {
+		return nil, err
+	}
+	reply, err := unmarshal(rawReply)
+	return reply, err
+}
+
+// sendRequest sends a request and returns the reply bytes.
+func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) ([]byte, error) {
 	remote.Lock()
 	reqID := remote.reqID
 	remote.responses[reqID] = make(chan json.RawMessage, 1)
@@ -166,7 +197,7 @@ func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[str
 	remote.Unlock()
 
 	if reply != nil {
-		return unmarshal(reply)
+		return reply, nil
 	}
 
 	return nil, nil
@@ -525,6 +556,36 @@ func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Unlock()
 }
 
+// StartProfiler starts the profiler.
+func (remote *RemoteDebugger) StartProfiler() error {
+	_, err := remote.sendRequest("Profiler.start", nil)
+	return err
+}
+
+// StopProfiler stops the profiler.
+// Returns a Profile data structure, as specified here: https://chromedevtools.github.io/debugger-protocol-viewer/tot/Profiler/#type-Profile
+func (remote *RemoteDebugger) StopProfiler() (p Profile, err error) {
+	res, err := remote.sendRawReplyRequest("Profiler.stop", nil)
+	if err != nil {
+		return p, err
+	}
+	var response map[string]json.RawMessage
+	err = json.Unmarshal(res, &response)
+	if err != nil {
+		return p, err
+	}
+	err = json.Unmarshal(response["profile"], &p)
+	return p, err
+}
+
+// SetProfilerSamplingInterval sets the profiler sampling interval in microseconds, must be called before StartProfiler.
+func (remote *RemoteDebugger) SetProfilerSamplingInterval(n int64) error {
+	_, err := remote.sendRequest("Profiler.setSamplingInterval", Params{
+		"interval": n,
+	})
+	return err
+}
+
 // DomainEvents enables event listening in the specified domain.
 func (remote *RemoteDebugger) DomainEvents(domain string, enable bool) error {
 	method := domain
@@ -562,4 +623,9 @@ func (remote *RemoteDebugger) RuntimeEvents(enable bool) error {
 // LogEvents enables Log events listening.
 func (remote *RemoteDebugger) LogEvents(enable bool) error {
 	return remote.DomainEvents("Log", enable)
+}
+
+// ProfilerEvents enables Profiler events listening.
+func (remote *RemoteDebugger) ProfilerEvents(enable bool) error {
+	return remote.DomainEvents("Profiler", enable)
 }

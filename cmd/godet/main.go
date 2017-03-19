@@ -53,6 +53,7 @@ func main() {
 	domains := flag.Bool("domains", false, "show list of available domains")
 	requests := flag.Bool("requests", false, "show request notifications")
 	responses := flag.Bool("responses", false, "show response notifications")
+	allEvents := flag.Bool("all-events", false, "enable all events")
 	logev := flag.Bool("log", false, "show log/console messages")
 	query := flag.String("query", "", "query against current document")
 	eval := flag.String("eval", "", "evaluate expression")
@@ -195,11 +196,15 @@ func main() {
 		})
 	}
 
-	remote.RuntimeEvents(true)
-	remote.NetworkEvents(true)
-	remote.PageEvents(true)
-	remote.DOMEvents(true)
-	remote.LogEvents(true)
+	if *allEvents {
+		remote.AllEvents(true)
+	} else {
+		remote.RuntimeEvents(true)
+		remote.NetworkEvents(true)
+		remote.PageEvents(true)
+		remote.DOMEvents(true)
+		remote.LogEvents(true)
+	}
 
 	if flag.NArg() > 0 {
 		p := flag.Arg(0)

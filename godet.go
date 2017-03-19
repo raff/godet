@@ -44,6 +44,12 @@ type Version struct {
 	WebKitVersion   string `json:"WebKit-Version"`
 }
 
+// Domain holds a domain name and version.
+type Domain struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
 // Tab represents an opened tab/page.
 type Tab struct {
 	ID          string `json:"id"`
@@ -171,8 +177,7 @@ func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[str
 	if err != nil || rawReply == nil {
 		return nil, err
 	}
-	reply, err := unmarshal(rawReply)
-	return reply, err
+	return unmarshal(rawReply)
 }
 
 // sendRequest sends a request and returns the reply bytes.
@@ -196,11 +201,7 @@ func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) 
 	remote.responses[reqID] = nil
 	remote.Unlock()
 
-	if reply != nil {
-		return reply, nil
-	}
-
-	return nil, nil
+	return reply, nil
 }
 
 func (remote *RemoteDebugger) sendMessages() {
@@ -383,9 +384,22 @@ func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
 }
 
 // GetDomains lists the available DevTools domains.
-func (remote *RemoteDebugger) GetDomains() (map[string]interface{}, error) {
-	res, err := remote.sendRequest("Schema.getDomains", nil)
-	return res, err
+func (remote *RemoteDebugger) GetDomains() ([]Domain, error) {
+	res, err := remote.sendRawReplyRequest("Schema.getDomains", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var domains struct {
+		Domains []Domain
+	}
+
+	err = json.Unmarshal(res, &domains)
+	if err != nil {
+		return nil, err
+	}
+
+	return domains.Domains, nil
 }
 
 // Navigate navigates to the specified URL.
@@ -606,6 +620,20 @@ func (remote *RemoteDebugger) DomainEvents(domain string, enable bool) error {
 
 	_, err := remote.sendRequest(method, nil)
 	return err
+}
+
+// AllEvents enables event listening for all domains.
+func (remote *RemoteDebugger) AllEvents(enable bool) error {
+	domains, err := remote.GetDomains()
+	if err != nil {
+		return err
+	}
+
+	for _, domain := range domains {
+		remote.DomainEvents(domain.Name, enable)
+	}
+
+	return nil
 }
 
 // DOMEvents enables DOM events listening.

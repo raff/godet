@@ -6,6 +6,7 @@ package godet
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -403,18 +404,53 @@ func (remote *RemoteDebugger) GetDomains() ([]Domain, error) {
 }
 
 // Navigate navigates to the specified URL.
-func (remote *RemoteDebugger) Navigate(url string) error {
-	_, err := remote.sendRequest("Page.navigate", Params{
+func (remote *RemoteDebugger) Navigate(url string) (string, error) {
+	res, err := remote.sendRequest("Page.navigate", Params{
 		"url": url,
 	})
-
-	return err
+	if err != nil {
+		return "", err
+	}
+	if res["frameId"] == nil {
+		return "", errors.New("Couldn't get Frame ID")
+	}
+	frameID := res["frameId"].(string)
+	return frameID, err
 }
 
 // Reload reloads the current page.
 func (remote *RemoteDebugger) Reload() error {
 	_, err := remote.sendRequest("Page.reload", Params{
 		"ignoreCache": true,
+	})
+
+	return err
+}
+
+// CaptureScreenshot takes a screenshot, uses "png" as default format.
+func (remote *RemoteDebugger) CaptureScreenshot(format string, quality int, fromSurface bool) ([]byte, error) {
+	if format == "" {
+		format = "png"
+	}
+	res, err := remote.sendRequest("Page.captureScreenshot", Params{
+		"format":      format,
+		"quality":     quality,
+		"fromSurface": fromSurface,
+	})
+
+	rawScreenshot, err := base64.StdEncoding.DecodeString(res["data"].(string))
+	if err != nil {
+		return nil, err
+	}
+
+	return rawScreenshot, err
+}
+
+// HandleJavaScriptDialog accepts or dismisses a Javascript initiated dialog.
+func (remote *RemoteDebugger) HandleJavaScriptDialog(accept bool, promptText string) error {
+	_, err := remote.sendRequest("Page.handleJavaScriptDialog", Params{
+		"accept":     accept,
+		"promptText": promptText,
 	})
 
 	return err

@@ -8,7 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/gobs/httpclient"
@@ -444,6 +447,26 @@ func (remote *RemoteDebugger) CaptureScreenshot(format string, quality int, from
 	}
 
 	return rawScreenshot, err
+}
+
+// SaveScreenshot takes a screenshot and saves it to a file.
+func (remote *RemoteDebugger) SaveScreenshot(filename string, perm os.FileMode, quality int, fromSurface bool) error {
+	var format string
+	ext := filepath.Ext(filename)
+	switch ext {
+	case ".jpg":
+		format = "jpeg"
+	case ".png":
+		format = "png"
+	default:
+		return errors.New("Image format not supported")
+	}
+	rawScreenshot, err := remote.CaptureScreenshot(format, quality, fromSurface)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(filename, rawScreenshot, perm)
+	return err
 }
 
 // HandleJavaScriptDialog accepts or dismisses a Javascript initiated dialog.

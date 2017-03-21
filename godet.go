@@ -6,8 +6,12 @@ package godet
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/gobs/httpclient"
@@ -412,12 +416,18 @@ func (remote *RemoteDebugger) GetDomains() ([]Domain, error) {
 }
 
 // Navigate navigates to the specified URL.
-func (remote *RemoteDebugger) Navigate(url string) error {
-	_, err := remote.sendRequest("Page.navigate", Params{
+func (remote *RemoteDebugger) Navigate(url string) (string, error) {
+	res, err := remote.sendRequest("Page.navigate", Params{
 		"url": url,
 	})
-
-	return err
+	if err != nil {
+		return "", err
+	}
+	if res["frameId"] == nil {
+		return "", errors.New("Couldn't get Frame ID")
+	}
+	frameID := res["frameId"].(string)
+	return frameID, err
 }
 
 // Reload reloads the current page.
@@ -443,6 +453,52 @@ func (remote *RemoteDebugger) ProcessNavigation(navigationId int, navigation Nav
 	_, err := remote.sendRequest("Page.processNavigation", Params{
 		"response":     navigation,
 		"navigationId": navigationId,
+	})
+
+	return err
+}
+
+// CaptureScreenshot takes a screenshot, uses "png" as default format.
+func (remote *RemoteDebugger) CaptureScreenshot(format string, quality int, fromSurface bool) ([]byte, error) {
+	if format == "" {
+		format = "png"
+	}
+	res, err := remote.sendRequest("Page.captureScreenshot", Params{
+		"format":      format,
+		"quality":     quality,
+		"fromSurface": fromSurface,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return base64.StdEncoding.DecodeString(res["data"].(string))
+}
+
+// SaveScreenshot takes a screenshot and saves it to a file.
+func (remote *RemoteDebugger) SaveScreenshot(filename string, perm os.FileMode, quality int, fromSurface bool) error {
+	var format string
+	ext := filepath.Ext(filename)
+	switch ext {
+	case ".jpg":
+		format = "jpeg"
+	case ".png":
+		format = "png"
+	default:
+		return errors.New("Image format not supported")
+	}
+	rawScreenshot, err := remote.CaptureScreenshot(format, quality, fromSurface)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(filename, rawScreenshot, perm)
+}
+
+// HandleJavaScriptDialog accepts or dismisses a Javascript initiated dialog.
+func (remote *RemoteDebugger) HandleJavaScriptDialog(accept bool, promptText string) error {
+	_, err := remote.sendRequest("Page.handleJavaScriptDialog", Params{
+		"accept":     accept,
+		"promptText": promptText,
 	})
 
 	return err

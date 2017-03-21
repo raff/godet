@@ -423,11 +423,11 @@ func (remote *RemoteDebugger) Navigate(url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if res["frameId"] == nil {
-		return "", errors.New("Couldn't get Frame ID")
+
+	if frameId, ok = res["frameId"]; !ok {
+		return "", nil
 	}
-	frameID := res["frameId"].(string)
-	return frameID, err
+	return frameId.(string), nil
 }
 
 // Reload reloads the current page.

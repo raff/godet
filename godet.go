@@ -17,7 +17,16 @@ import (
 const (
 	// EventClosed represents the "RemoteDebugger.closed" event.
 	EventClosed = "RemoteDebugger.closed"
+
+	// NavigationProceed allows the navigation
+	NavigationProceed = NavigationResponse("Proceed")
+	// NavigationCancel cancels the navigation
+	NavigationCancel = NavigationResponse("Cancel")
+	// CancelAndIgnore cancels the navigation and makes the requester of the navigation acts like the request was never made.
+	NavigationCancelAndIgnore = NavigationResponse("CancelAndIgnore")
 )
+
+type NavigationResponse string
 
 func decode(resp *httpclient.HttpResponse, v interface{}) error {
 	err := json.NewDecoder(resp.Body).Decode(v)
@@ -415,6 +424,25 @@ func (remote *RemoteDebugger) Navigate(url string) error {
 func (remote *RemoteDebugger) Reload() error {
 	_, err := remote.sendRequest("Page.reload", Params{
 		"ignoreCache": true,
+	})
+
+	return err
+}
+
+// SetControlNavigation toggles navigation throttling which allows programatic control over navigation and redirect response.
+func (remote *RemoteDebugger) SetControlNavigation(enabled bool) error {
+	_, err := remote.sendRequest("Page.setControlNavigation", Params{
+		"enabled": enabled,
+	})
+
+	return err
+}
+
+// ProcessNavigation should be sent in response to a navigationRequested or a redirectRequested event, telling the browser how to handle the navigation.
+func (remote *RemoteDebugger) ProcessNavigation(navigationId int, navigation NavigationResponse) error {
+	_, err := remote.sendRequest("Page.processNavigation", Params{
+		"response":     navigation,
+		"navigationId": navigationId,
 	})
 
 	return err

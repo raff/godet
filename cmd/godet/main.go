@@ -20,6 +20,14 @@ func runCommand(commandString string) error {
 	return cmd.Start()
 }
 
+func limit(s string, l int) string {
+    if len(s) > l {
+        return s[:l] + "..."
+    } else {
+        return s
+    }
+}
+
 func main() {
 	var chromeapp string
 
@@ -57,6 +65,7 @@ func main() {
 	logev := flag.Bool("log", false, "show log/console messages")
 	query := flag.String("query", "", "query against current document")
 	eval := flag.String("eval", "", "evaluate expression")
+	screenshot := flag.Bool("screenshot", false, "take a screenshot")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -145,7 +154,7 @@ func main() {
 					if err != nil {
 						log.Println("Error getting responseBody", err)
 					} else {
-						log.Println("ResponseBody", len(res), string(res[:10]))
+						log.Println("ResponseBody", len(res), limit(string(res), 10))
 					}
 				}()
 			}
@@ -196,6 +205,14 @@ func main() {
 		})
 	}
 
+	if *screenshot {
+                remote.CallbackEvent("DOM.documentUpdated", func(params godet.Params) {
+                        log.Println("document updated. taking screenshot...")
+		        remote.SaveScreenshot("screenshot.png", 0644, 0, false)
+                })
+	}
+
+
 	if *allEvents {
 		remote.AllEvents(true)
 	} else {
@@ -219,7 +236,7 @@ func main() {
 		} else {
 			err := remote.ActivateTab(tabs[0])
 			if err == nil {
-				err = remote.Navigate(p)
+				_, err = remote.Navigate(p)
 			}
 		}
 

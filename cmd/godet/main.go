@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"runtime"
 	"time"
@@ -21,11 +22,11 @@ func runCommand(commandString string) error {
 }
 
 func limit(s string, l int) string {
-    if len(s) > l {
-        return s[:l] + "..."
-    } else {
-        return s
-    }
+	if len(s) > l {
+		return s[:l] + "..."
+	} else {
+		return s
+	}
 }
 
 func main() {
@@ -33,15 +34,27 @@ func main() {
 
 	switch runtime.GOOS {
 	case "darwin":
-		chromeapp = "open /Applications/Google\\ Chrome.app --args"
+		for _, c := range []string{
+			"/Applications/Google Chrome Canary.app",
+			"/Applications/Google Chrome.app",
+		} {
+			// MacOS apps are actually folders
+			if info, err := os.Stat(c); err == nil && info.IsDir() {
+				chromeapp = fmt.Sprintf("open %q --args", c)
+				break
+			}
+		}
 
 	case "linux":
-		for _, c := range []string{"chromium",
+		for _, c := range []string{
+			"headless_shell",
+			"chromium",
 			"google-chrome-beta",
 			"google-chrome-unstable",
 			"google-chrome-stable"} {
 			if _, err := exec.LookPath(c); err == nil {
 				chromeapp = c
+				break
 			}
 		}
 
@@ -49,7 +62,13 @@ func main() {
 	}
 
 	if chromeapp != "" {
-		chromeapp += " --remote-debugging-port=9222 --disable-extensions --disable-gpu --headless about:blank"
+		if chromeapp == "headless_shell" {
+			chromeapp += " --no-sandbox"
+		} else {
+			chromeapp += " --headless"
+		}
+
+		chromeapp += " --remote-debugging-port=9222 --disable-extensions --disable-gpu about:blank"
 	}
 
 	cmd := flag.String("cmd", chromeapp, "command to execute to start the browser")
@@ -66,6 +85,7 @@ func main() {
 	query := flag.String("query", "", "query against current document")
 	eval := flag.String("eval", "", "evaluate expression")
 	screenshot := flag.Bool("screenshot", false, "take a screenshot")
+	control := flag.Bool("control", false, "control navigation")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -143,9 +163,11 @@ func main() {
 
 	if *responses {
 		remote.CallbackEvent("Network.responseReceived", func(params godet.Params) {
+			url := params["response"].(map[string]interface{})["url"].(string)
+
 			log.Println("responseReceived",
 				params["type"],
-				params["response"].(map[string]interface{})["url"])
+				limit(url, 80))
 
 			if params["type"].(string) == "Image" {
 				go func() {
@@ -206,12 +228,19 @@ func main() {
 	}
 
 	if *screenshot {
-                remote.CallbackEvent("DOM.documentUpdated", func(params godet.Params) {
-                        log.Println("document updated. taking screenshot...")
-		        remote.SaveScreenshot("screenshot.png", 0644, 0, false)
-                })
+		remote.CallbackEvent("DOM.documentUpdated", func(params godet.Params) {
+			log.Println("document updated. taking screenshot...")
+			remote.SaveScreenshot("screenshot.png", 0644, 0, false)
+		})
 	}
 
+	if *control {
+		remote.SetControlNavigation(true)
+
+		remote.CallbackEvent("Page.navigationRequested", func(params godet.Params) {
+			log.Println("navigation requested for", params["url"])
+		})
+	}
 
 	if *allEvents {
 		remote.AllEvents(true)
@@ -234,14 +263,13 @@ func main() {
 		if len(tabs) == 0 {
 			_, err = remote.NewTab(p)
 		} else {
-			err := remote.ActivateTab(tabs[0])
-			if err == nil {
+			if err = remote.ActivateTab(tabs[0]); err == nil {
 				_, err = remote.Navigate(p)
 			}
 		}
 
 		if err != nil {
-			log.Println("error loading page", err)
+			log.Fatal("error loading page", err)
 		}
 	}
 

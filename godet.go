@@ -26,10 +26,11 @@ const (
 	NavigationProceed = NavigationResponse("Proceed")
 	// NavigationCancel cancels the navigation
 	NavigationCancel = NavigationResponse("Cancel")
-	// CancelAndIgnore cancels the navigation and makes the requester of the navigation acts like the request was never made.
+	// NavigationCancelAndIgnore cancels the navigation and makes the requester of the navigation acts like the request was never made.
 	NavigationCancelAndIgnore = NavigationResponse("CancelAndIgnore")
 )
 
+// NavigationResponse define the type for ProcessNavigation `response`
 type NavigationResponse string
 
 func decode(resp *httpclient.HttpResponse, v interface{}) error {
@@ -424,10 +425,10 @@ func (remote *RemoteDebugger) Navigate(url string) (string, error) {
 		return "", err
 	}
 
-	if frameId, ok := res["frameId"]; !ok {
+	if frameid, ok := res["frameId"]; !ok {
 		return "", nil
 	} else {
-		return frameId.(string), nil
+		return frameid.(string), nil
 	}
 }
 
@@ -450,10 +451,10 @@ func (remote *RemoteDebugger) SetControlNavigation(enabled bool) error {
 }
 
 // ProcessNavigation should be sent in response to a navigationRequested or a redirectRequested event, telling the browser how to handle the navigation.
-func (remote *RemoteDebugger) ProcessNavigation(navigationId int, navigation NavigationResponse) error {
+func (remote *RemoteDebugger) ProcessNavigation(navigationID int, navigation NavigationResponse) error {
 	_, err := remote.sendRequest("Page.processNavigation", Params{
 		"response":     navigation,
-		"navigationId": navigationId,
+		"navigationId": navigationID,
 	})
 
 	return err
@@ -588,8 +589,8 @@ func (remote *RemoteDebugger) SetAttributeValue(nodeID int, name, value string) 
 }
 
 // SendRune sends a character as keyboard input.
-func (remote *RemoteDebugger) SendRune(c rune) (err error) {
-	if _, err = remote.sendRequest("Input.dispatchKeyEvent", Params{
+func (remote *RemoteDebugger) SendRune(c rune) error {
+	if _, err := remote.sendRequest("Input.dispatchKeyEvent", Params{
 		"type":                  "rawKeyDown",
 		"windowsVirtualKeyCode": int(c),
 		"nativeVirtualKeyCode":  int(c),
@@ -607,7 +608,7 @@ func (remote *RemoteDebugger) SendRune(c rune) (err error) {
 	}); err != nil {
 		return err
 	}
-	_, err = remote.sendRequest("Input.dispatchKeyEvent", Params{
+	_, err := remote.sendRequest("Input.dispatchKeyEvent", Params{
 		"type":                  "keyUp",
 		"windowsVirtualKeyCode": int(c),
 		"nativeVirtualKeyCode":  int(c),
@@ -715,7 +716,9 @@ func (remote *RemoteDebugger) AllEvents(enable bool) error {
 	}
 
 	for _, domain := range domains {
-		remote.DomainEvents(domain.Name, enable)
+		if err := remote.DomainEvents(domain.Name, enable); err != nil {
+			return err
+		}
 	}
 
 	return nil

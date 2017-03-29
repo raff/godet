@@ -425,11 +425,11 @@ func (remote *RemoteDebugger) Navigate(url string) (string, error) {
 		return "", err
 	}
 
-	if frameid, ok := res["frameId"]; !ok {
+	frameID, ok := res["frameId"]
+	if !ok {
 		return "", nil
-	} else {
-		return frameid.(string), nil
 	}
+	return frameID.(string), nil
 }
 
 // Reload reloads the current page.

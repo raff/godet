@@ -24,9 +24,8 @@ func runCommand(commandString string) error {
 func limit(s string, l int) string {
 	if len(s) > l {
 		return s[:l] + "..."
-	} else {
-		return s
 	}
+	return s
 }
 
 func main() {

@@ -76,6 +76,7 @@ func main() {
 	version := flag.Bool("version", false, "display remote devtools version")
 	listtabs := flag.Bool("tabs", false, "show list of open tabs")
 	seltab := flag.Int("tab", 0, "select specified tab if available")
+	newtab := flag.Bool("new", false, "always open a new tab")
 	filter := flag.String("filter", "page", "filter tab list")
 	domains := flag.Bool("domains", false, "show list of available domains")
 	requests := flag.Bool("requests", false, "show request notifications")
@@ -260,7 +261,7 @@ func main() {
 			log.Fatal("cannot get tabs: ", err)
 		}
 
-		if len(tabs) == 0 {
+		if len(tabs) == 0 || *newtab {
 			_, err = remote.NewTab(p)
 		} else {
 			tab := *seltab

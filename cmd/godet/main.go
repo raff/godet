@@ -75,6 +75,7 @@ func main() {
 	verbose := flag.Bool("verbose", false, "verbose logging")
 	version := flag.Bool("version", false, "display remote devtools version")
 	listtabs := flag.Bool("tabs", false, "show list of open tabs")
+	seltab := flag.Int("tab", 0, "select specified tab if available")
 	filter := flag.String("filter", "page", "filter tab list")
 	domains := flag.Bool("domains", false, "show list of available domains")
 	requests := flag.Bool("requests", false, "show request notifications")
@@ -262,7 +263,12 @@ func main() {
 		if len(tabs) == 0 {
 			_, err = remote.NewTab(p)
 		} else {
-			if err = remote.ActivateTab(tabs[0]); err == nil {
+			tab := *seltab
+			if tab > len(tabs) {
+				tab = 0
+			}
+
+			if err = remote.ActivateTab(tabs[tab]); err == nil {
 				_, err = remote.Navigate(p)
 			}
 		}

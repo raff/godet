@@ -391,11 +391,12 @@ func (remote *RemoteDebugger) CloseTab(tab *Tab) error {
 
 // NewTab creates a new tab.
 func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
-	params := Params{}
+	path := "/json/new"
 	if url != "" {
-		params["url"] = url
+		path += "?" + url
 	}
-	resp, err := remote.http.Get("/json/new", params, nil)
+
+	resp, err := remote.http.Do(remote.http.Request("GET", path, nil, nil))
 	if err != nil {
 		return nil, err
 	}

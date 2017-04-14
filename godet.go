@@ -96,10 +96,21 @@ type ProfileNode struct {
 }
 
 // EvaluateError is returned by Evaluate in case of expression errors.
-type EvaluateError map[string]interface{}
+type EvaluateError struct {
+	ErrorDetails     map[string]interface{}
+	ExceptionDetails map[string]interface{}
+}
 
 func (err EvaluateError) Error() string {
-	return err["description"].(string)
+	desc := err.ErrorDetails["description"].(string)
+	if excp := err.ExceptionDetails; excp != nil {
+		if excp["exception"] != nil {
+			desc += fmt.Sprintf(" at line %v col %v",
+				excp["lineNumber"].(float64), excp["columnNumber"].(float64))
+		}
+	}
+
+	return desc
 }
 
 // RemoteDebugger implements an interface for Chrome DevTools.
@@ -633,13 +644,14 @@ func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
 		return nil, nil
 	}
 
-	res = res["result"].(map[string]interface{})
-	if subtype, ok := res["subtype"]; ok && subtype.(string) == "error" {
+	result := res["result"].(map[string]interface{})
+	if subtype, ok := result["subtype"]; ok && subtype.(string) == "error" {
 		// this is actually an error
-		return nil, EvaluateError(res)
+		exception := res["exceptionDetails"].(map[string]interface{})
+		return nil, EvaluateError{ErrorDetails: result, ExceptionDetails: exception}
 	}
 
-	return res["value"], nil
+	return result["value"], nil
 }
 
 // EvaluateWrap evaluates a list of expressions, EvaluateWrap wraps them in `(function(){ ... })()`.

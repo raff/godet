@@ -147,7 +147,10 @@ func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 		verbose:   verbose,
 	}
 
-	remote.http.Verbose = verbose
+	// remote.http.Verbose = verbose
+	if verbose {
+		httpclient.StartLogging(false, true)
+	}
 
 	// check http connection
 	tabs, err := remote.TabList("")
@@ -185,6 +188,9 @@ func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 func (remote *RemoteDebugger) Close() error {
 	close(remote.closed)
 	err := remote.ws.Close()
+	if remote.verbose {
+		httpclient.StopLogging()
+	}
 	return err
 }
 
@@ -347,7 +353,10 @@ func (remote *RemoteDebugger) Version() (*Version, error) {
 }
 
 // TabList returns a list of opened tabs/pages.
-// If filter is not empty only tabs of the specified type are returned (i.e. "page")
+// If filter is not empty, only tabs of the specified type are returned (i.e. "page").
+//
+// Note that tabs are ordered by activitiy time (most recently used first) so the
+// current tab is the first one of type "page".
 func (remote *RemoteDebugger) TabList(filter string) ([]*Tab, error) {
 	resp, err := remote.http.Get("/json/list", nil, nil)
 	if err != nil {

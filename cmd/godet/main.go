@@ -127,7 +127,7 @@ func main() {
 	if *version {
 		pretty.PrettyPrint(v)
 	} else {
-		log.Println("connected to", v.Browser, ", protocol v.", v.ProtocolVersion)
+		log.Println("connected to", v.Browser, " protocol version", v.ProtocolVersion)
 	}
 
 	if *listtabs {

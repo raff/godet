@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -28,6 +29,13 @@ const (
 	NavigationCancel = NavigationResponse("Cancel")
 	// NavigationCancelAndIgnore cancels the navigation and makes the requester of the navigation acts like the request was never made.
 	NavigationCancelAndIgnore = NavigationResponse("CancelAndIgnore")
+)
+
+var (
+	// ErrorNoActiveTab is returned if there are no active tabs (of type "page")
+	ErrorNoActiveTab = errors.New("no active tab")
+	// ErrorNoWsURL is returned if the active tab has no websocket URL
+	ErrorNoWsURL = errors.New("no websocket URL")
 )
 
 // NavigationResponse define the type for ProcessNavigation `response`
@@ -117,6 +125,7 @@ func (err EvaluateError) Error() string {
 type RemoteDebugger struct {
 	http    *httpclient.HttpClient
 	ws      *websocket.Conn
+	current string
 	reqID   int
 	verbose bool
 
@@ -152,36 +161,64 @@ func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 		httpclient.StartLogging(false, true)
 	}
 
-	// check http connection
-	tabs, err := remote.TabList("")
-	if err != nil {
+	if err := remote.connectWs(nil); err != nil {
 		return nil, err
 	}
 
-	getWsURL := func() string {
-		for _, tab := range tabs {
-			if tab.WsURL != "" {
-				return tab.WsURL
-			}
-		}
-
-		return "ws://" + port + "/devtools/page/00000000-0000-0000-0000-000000000000"
-	}
-
-	wsURL := getWsURL()
-
-	// check websocket connection
-	if remote.ws, _, err = websocket.DefaultDialer.Dial(wsURL, nil); err != nil {
-		if verbose {
-			log.Println("dial", wsURL, "error", err)
-		}
-		return nil, err
-	}
-
-	go remote.readMessages()
 	go remote.sendMessages()
 	go remote.processEvents()
 	return remote, nil
+}
+
+func (remote *RemoteDebugger) connectWs(tab *Tab) error {
+	if tab == nil {
+		tabs, err := remote.TabList("page")
+		if err != nil {
+			return err
+		}
+
+		if len(tabs) == 0 {
+			return ErrorNoActiveTab
+		}
+
+		tab = tabs[0]
+	}
+
+	if remote.ws != nil {
+		if tab.ID == remote.current {
+			// nothing to do
+			return nil
+		}
+
+		if remote.verbose {
+			log.Println("disconnecting from current tab, id ", remote.current)
+		}
+
+		remote.current = ""
+		_ = remote.ws.Close()
+	}
+
+	if len(tab.WsURL) == 0 {
+		return ErrorNoWsURL
+	}
+
+	// check websocket connection
+	if remote.verbose {
+		log.Println("connecting to tab", tab.WsURL)
+	}
+
+	ws, _, err := websocket.DefaultDialer.Dial(tab.WsURL, nil)
+	if err != nil {
+		if remote.verbose {
+			log.Println("dial error:", err)
+		}
+		return err
+	}
+
+	remote.ws = ws
+	remote.current = tab.ID
+	go remote.readMessages()
+	return nil
 }
 
 // Close the RemoteDebugger connection.
@@ -249,23 +286,38 @@ func (remote *RemoteDebugger) sendMessages() {
 
 		err = remote.ws.WriteMessage(websocket.TextMessage, bytes)
 		if err != nil {
-			log.Println("write message", err)
+			log.Println("write message:", err)
 		}
 	}
 }
 
+func permanentError(err error) bool {
+	if websocket.IsUnexpectedCloseError(err) {
+		return true
+	}
+
+	if neterr, ok := err.(net.Error); ok && !neterr.Temporary() {
+		return true
+	}
+
+	return false
+}
+
 func (remote *RemoteDebugger) readMessages() {
+	remoteClosed := false
+
 loop:
 	for {
 		select {
 		case <-remote.closed:
+			remoteClosed = true
 			break loop
 
 		default:
 			_, bytes, err := remote.ws.ReadMessage()
 			if err != nil {
-				log.Println("read message", err)
-				if websocket.IsUnexpectedCloseError(err) {
+				log.Println("read message:", err)
+				if permanentError(err) {
 					break loop
 				}
 			} else {
@@ -293,6 +345,7 @@ loop:
 					case remote.events <- message:
 
 					case <-remote.closed:
+						remoteClosed = true
 						break loop
 					}
 				} else {
@@ -315,8 +368,10 @@ loop:
 		}
 	}
 
-	remote.events <- wsMessage{Method: EventClosed, Params: []byte("{}")}
-	close(remote.events)
+	if remoteClosed {
+		remote.events <- wsMessage{Method: EventClosed, Params: []byte("{}")}
+		close(remote.events)
+	}
 }
 
 func (remote *RemoteDebugger) processEvents() {
@@ -388,6 +443,11 @@ func (remote *RemoteDebugger) TabList(filter string) ([]*Tab, error) {
 func (remote *RemoteDebugger) ActivateTab(tab *Tab) error {
 	resp, err := remote.http.Get("/json/activate/"+tab.ID, nil, nil)
 	resp.Close()
+
+	if err == nil {
+		err = remote.connectWs(tab)
+	}
+
 	return err
 }
 
@@ -412,6 +472,10 @@ func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
 
 	var tab Tab
 	if err = decode(resp, &tab); err != nil {
+		return nil, err
+	}
+
+	if err = remote.connectWs(&tab); err != nil {
 		return nil, err
 	}
 

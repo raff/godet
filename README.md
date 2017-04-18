@@ -51,6 +51,9 @@ A pretty complete example is available at `cmd/godet/main.go`
             fmt.Println("LOG", entry["type"], entry["level"], entry["text"])
     })
 
+    // create new tab
+    tab, err = remote.NewTab("https://www.google.com")
+
     // enable event processing
     remote.RuntimeEvents(true)
     remote.NetworkEvents(true)
@@ -58,11 +61,12 @@ A pretty complete example is available at `cmd/godet/main.go`
     remote.DOMEvents(true)
     remote.LogEvents(true)
 
-    // create new tab
-    tab, err = remote.NewTab("https://www.google.com")
-
     // navigate in existing tab
     err := remote.ActivateTab(tabs[0])
+
+    // re-enable events when changing active tab
+    remote.AllEvents(true) // enable all events
+
     err := remote.Navigate("https://www.google.com")
 
     // evaluate Javascript expression in existing context

@@ -127,7 +127,7 @@ func main() {
 	if *version {
 		pretty.PrettyPrint(v)
 	} else {
-		log.Println("connected to", v.Browser, " protocol version", v.ProtocolVersion)
+		log.Println("connected to", v.Browser, "protocol version", v.ProtocolVersion)
 	}
 
 	if *listtabs {
@@ -243,16 +243,6 @@ func main() {
 		})
 	}
 
-	if *allEvents {
-		remote.AllEvents(true)
-	} else {
-		remote.RuntimeEvents(true)
-		remote.NetworkEvents(true)
-		remote.PageEvents(true)
-		remote.DOMEvents(true)
-		remote.LogEvents(true)
-	}
-
 	if flag.NArg() > 0 {
 		p := flag.Arg(0)
 
@@ -275,9 +265,20 @@ func main() {
 		}
 
 		if err != nil {
-			log.Fatal("error loading page", err)
+			log.Fatal("error loading page: ", err)
 		}
 	}
+
+	if *allEvents {
+		remote.AllEvents(true)
+	} else {
+		remote.RuntimeEvents(true)
+		remote.NetworkEvents(true)
+		remote.PageEvents(true)
+		remote.DOMEvents(true)
+		remote.LogEvents(true)
+	}
+
 
 	if *query != "" {
 		res, err := remote.GetDocument()

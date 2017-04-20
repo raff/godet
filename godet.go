@@ -21,6 +21,7 @@ import (
 
 const (
 	// EventClosed represents the "RemoteDebugger.closed" event.
+	// It is emitted when RemoteDebugger.Close() is called.
 	EventClosed = "RemoteDebugger.closed"
 
 	// NavigationProceed allows the navigation

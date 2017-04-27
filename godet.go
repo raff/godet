@@ -240,8 +240,8 @@ type wsMessage struct {
 	Params json.RawMessage `json:"Params"`
 }
 
-// sendRequest sends a request and returns the reply as a a map.
-func (remote *RemoteDebugger) sendRequest(method string, params Params) (map[string]interface{}, error) {
+// SendRequest sends a request and returns the reply as a a map.
+func (remote *RemoteDebugger) SendRequest(method string, params Params) (map[string]interface{}, error) {
 	rawReply, err := remote.sendRawReplyRequest(method, params)
 	if err != nil || rawReply == nil {
 		return nil, err
@@ -506,7 +506,7 @@ func (remote *RemoteDebugger) GetDomains() ([]Domain, error) {
 
 // Navigate navigates to the specified URL.
 func (remote *RemoteDebugger) Navigate(url string) (string, error) {
-	res, err := remote.sendRequest("Page.navigate", Params{
+	res, err := remote.SendRequest("Page.navigate", Params{
 		"url": url,
 	})
 	if err != nil {
@@ -522,7 +522,7 @@ func (remote *RemoteDebugger) Navigate(url string) (string, error) {
 
 // Reload reloads the current page.
 func (remote *RemoteDebugger) Reload() error {
-	_, err := remote.sendRequest("Page.reload", Params{
+	_, err := remote.SendRequest("Page.reload", Params{
 		"ignoreCache": true,
 	})
 
@@ -531,7 +531,7 @@ func (remote *RemoteDebugger) Reload() error {
 
 // SetControlNavigation toggles navigation throttling which allows programatic control over navigation and redirect response.
 func (remote *RemoteDebugger) SetControlNavigation(enabled bool) error {
-	_, err := remote.sendRequest("Page.setControlNavigation", Params{
+	_, err := remote.SendRequest("Page.setControlNavigation", Params{
 		"enabled": enabled,
 	})
 
@@ -540,7 +540,7 @@ func (remote *RemoteDebugger) SetControlNavigation(enabled bool) error {
 
 // ProcessNavigation should be sent in response to a navigationRequested or a redirectRequested event, telling the browser how to handle the navigation.
 func (remote *RemoteDebugger) ProcessNavigation(navigationID int, navigation NavigationResponse) error {
-	_, err := remote.sendRequest("Page.processNavigation", Params{
+	_, err := remote.SendRequest("Page.processNavigation", Params{
 		"response":     navigation,
 		"navigationId": navigationID,
 	})
@@ -553,7 +553,7 @@ func (remote *RemoteDebugger) CaptureScreenshot(format string, quality int, from
 	if format == "" {
 		format = "png"
 	}
-	res, err := remote.sendRequest("Page.captureScreenshot", Params{
+	res, err := remote.SendRequest("Page.captureScreenshot", Params{
 		"format":      format,
 		"quality":     quality,
 		"fromSurface": fromSurface,
@@ -586,7 +586,7 @@ func (remote *RemoteDebugger) SaveScreenshot(filename string, perm os.FileMode, 
 
 // HandleJavaScriptDialog accepts or dismisses a Javascript initiated dialog.
 func (remote *RemoteDebugger) HandleJavaScriptDialog(accept bool, promptText string) error {
-	_, err := remote.sendRequest("Page.handleJavaScriptDialog", Params{
+	_, err := remote.SendRequest("Page.handleJavaScriptDialog", Params{
 		"accept":     accept,
 		"promptText": promptText,
 	})
@@ -596,7 +596,7 @@ func (remote *RemoteDebugger) HandleJavaScriptDialog(accept bool, promptText str
 
 // GetResponseBody returns the response body of a given requestId (from the Network.responseReceived payload).
 func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
-	res, err := remote.sendRequest("Network.getResponseBody", Params{
+	res, err := remote.SendRequest("Network.getResponseBody", Params{
 		"requestId": req,
 	})
 
@@ -611,12 +611,12 @@ func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
 
 // GetDocument gets the "Document" object as a DevTool node.
 func (remote *RemoteDebugger) GetDocument() (map[string]interface{}, error) {
-	return remote.sendRequest("DOM.getDocument", nil)
+	return remote.SendRequest("DOM.getDocument", nil)
 }
 
 // QuerySelector gets the nodeId for a specified selector.
 func (remote *RemoteDebugger) QuerySelector(nodeID int, selector string) (map[string]interface{}, error) {
-	return remote.sendRequest("DOM.querySelector", Params{
+	return remote.SendRequest("DOM.querySelector", Params{
 		"nodeId":   nodeID,
 		"selector": selector,
 	})
@@ -624,7 +624,7 @@ func (remote *RemoteDebugger) QuerySelector(nodeID int, selector string) (map[st
 
 // QuerySelectorAll gets a list of nodeId for the specified selectors.
 func (remote *RemoteDebugger) QuerySelectorAll(nodeID int, selector string) (map[string]interface{}, error) {
-	return remote.sendRequest("DOM.querySelectorAll", Params{
+	return remote.SendRequest("DOM.querySelectorAll", Params{
 		"nodeId":   nodeID,
 		"selector": selector,
 	})
@@ -632,14 +632,14 @@ func (remote *RemoteDebugger) QuerySelectorAll(nodeID int, selector string) (map
 
 // ResolveNode returns some information about the node.
 func (remote *RemoteDebugger) ResolveNode(nodeID int) (map[string]interface{}, error) {
-	return remote.sendRequest("DOM.resolveNode", Params{
+	return remote.SendRequest("DOM.resolveNode", Params{
 		"nodeId": nodeID,
 	})
 }
 
 // RequestNode requests a node, the response is generated as a DOM.setChildNodes event.
 func (remote *RemoteDebugger) RequestNode(nodeID int) error {
-	_, err := remote.sendRequest("DOM.requestChildNodes", Params{
+	_, err := remote.SendRequest("DOM.requestChildNodes", Params{
 		"nodeId": nodeID,
 	})
 
@@ -648,7 +648,7 @@ func (remote *RemoteDebugger) RequestNode(nodeID int) error {
 
 // Focus sets focus on a specified node.
 func (remote *RemoteDebugger) Focus(nodeID int) error {
-	_, err := remote.sendRequest("DOM.focus", Params{
+	_, err := remote.SendRequest("DOM.focus", Params{
 		"nodeId": nodeID,
 	})
 
@@ -657,7 +657,7 @@ func (remote *RemoteDebugger) Focus(nodeID int) error {
 
 // SetInputFiles attaches input files to a specified node (an input[type=file] element?).
 func (remote *RemoteDebugger) SetInputFiles(nodeID int, files []string) error {
-	_, err := remote.sendRequest("DOM.setInputFiles", Params{
+	_, err := remote.SendRequest("DOM.setInputFiles", Params{
 		"nodeId": nodeID,
 		"files":  files,
 	})
@@ -667,7 +667,7 @@ func (remote *RemoteDebugger) SetInputFiles(nodeID int, files []string) error {
 
 // SetAttributeValue sets the value for a specified attribute.
 func (remote *RemoteDebugger) SetAttributeValue(nodeID int, name, value string) error {
-	_, err := remote.sendRequest("DOM.setAttributeValue", Params{
+	_, err := remote.SendRequest("DOM.setAttributeValue", Params{
 		"nodeId": nodeID,
 		"name":   name,
 		"value":  value,
@@ -678,7 +678,7 @@ func (remote *RemoteDebugger) SetAttributeValue(nodeID int, name, value string) 
 
 // SendRune sends a character as keyboard input.
 func (remote *RemoteDebugger) SendRune(c rune) error {
-	if _, err := remote.sendRequest("Input.dispatchKeyEvent", Params{
+	if _, err := remote.SendRequest("Input.dispatchKeyEvent", Params{
 		"type":                  "rawKeyDown",
 		"windowsVirtualKeyCode": int(c),
 		"nativeVirtualKeyCode":  int(c),
@@ -687,7 +687,7 @@ func (remote *RemoteDebugger) SendRune(c rune) error {
 	}); err != nil {
 		return err
 	}
-	if _, err := remote.sendRequest("Input.dispatchKeyEvent", Params{
+	if _, err := remote.SendRequest("Input.dispatchKeyEvent", Params{
 		"type":                  "char",
 		"windowsVirtualKeyCode": int(c),
 		"nativeVirtualKeyCode":  int(c),
@@ -696,7 +696,7 @@ func (remote *RemoteDebugger) SendRune(c rune) error {
 	}); err != nil {
 		return err
 	}
-	_, err := remote.sendRequest("Input.dispatchKeyEvent", Params{
+	_, err := remote.SendRequest("Input.dispatchKeyEvent", Params{
 		"type":                  "keyUp",
 		"windowsVirtualKeyCode": int(c),
 		"nativeVirtualKeyCode":  int(c),
@@ -708,7 +708,7 @@ func (remote *RemoteDebugger) SendRune(c rune) error {
 
 // Evaluate evalutes a Javascript function in the context of the current page.
 func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
-	res, err := remote.sendRequest("Runtime.evaluate", Params{
+	res, err := remote.SendRequest("Runtime.evaluate", Params{
 		"expression":    expr,
 		"returnByValue": true,
 	})
@@ -740,7 +740,7 @@ func (remote *RemoteDebugger) EvaluateWrap(expr string) (interface{}, error) {
 
 // SetUserAgent overrides the default user agent.
 func (remote *RemoteDebugger) SetUserAgent(userAgent string) error {
-	_, err := remote.sendRequest("Network.setUserAgentOverride", Params{
+	_, err := remote.SendRequest("Network.setUserAgentOverride", Params{
 		"userAgent": userAgent,
 	})
 	return err
@@ -755,7 +755,7 @@ func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 
 // StartProfiler starts the profiler.
 func (remote *RemoteDebugger) StartProfiler() error {
-	_, err := remote.sendRequest("Profiler.start", nil)
+	_, err := remote.SendRequest("Profiler.start", nil)
 	return err
 }
 
@@ -777,7 +777,7 @@ func (remote *RemoteDebugger) StopProfiler() (p Profile, err error) {
 
 // SetProfilerSamplingInterval sets the profiler sampling interval in microseconds, must be called before StartProfiler.
 func (remote *RemoteDebugger) SetProfilerSamplingInterval(n int64) error {
-	_, err := remote.sendRequest("Profiler.setSamplingInterval", Params{
+	_, err := remote.SendRequest("Profiler.setSamplingInterval", Params{
 		"interval": n,
 	})
 	return err
@@ -793,7 +793,7 @@ func (remote *RemoteDebugger) DomainEvents(domain string, enable bool) error {
 		method += ".disable"
 	}
 
-	_, err := remote.sendRequest(method, nil)
+	_, err := remote.SendRequest(method, nil)
 	return err
 }
 

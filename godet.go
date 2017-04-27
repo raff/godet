@@ -263,10 +263,10 @@ func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) 
 	}
 
 	remote.requests <- command
-
 	reply := <-remote.responses[reqID]
+
 	remote.Lock()
-	remote.responses[reqID] = nil
+	delete(remote.responses, reqID)
 	remote.Unlock()
 
 	return reply, nil
@@ -367,6 +367,8 @@ loop:
 			}
 		}
 	}
+
+	// log.Println("exit readMessages", remoteClosed)
 
 	if remoteClosed {
 		remote.events <- wsMessage{Method: EventClosed, Params: []byte("{}")}

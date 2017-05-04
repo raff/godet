@@ -51,6 +51,9 @@ A pretty complete example is available at `cmd/godet/main.go`
             fmt.Println("LOG", entry["type"], entry["level"], entry["text"])
     })
 
+    // block loading of most images
+    err = remote.SetBlockedURLs("*.jpg", "*.png", "*.gif")
+    
     // create new tab
     tab, err = remote.NewTab("https://www.google.com")
 
@@ -62,15 +65,15 @@ A pretty complete example is available at `cmd/godet/main.go`
     remote.LogEvents(true)
 
     // navigate in existing tab
-    err := remote.ActivateTab(tabs[0])
+    err = remote.ActivateTab(tabs[0])
 
     // re-enable events when changing active tab
     remote.AllEvents(true) // enable all events
 
-    err := remote.Navigate("https://www.google.com")
+    err = remote.Navigate("https://www.google.com")
 
     // evaluate Javascript expression in existing context
-    res, err := remote.EvaluateWrap(`
+    res, err = remote.EvaluateWrap(`
         console.log("hello from godet!")
         return 42;
     `)

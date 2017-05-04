@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/gobs/args"
@@ -87,6 +88,7 @@ func main() {
 	eval := flag.String("eval", "", "evaluate expression")
 	screenshot := flag.Bool("screenshot", false, "take a screenshot")
 	control := flag.Bool("control", false, "control navigation")
+	block := flag.String("block", "", "block specified URLs or pattenrs. Use '|' as separator")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -164,23 +166,29 @@ func main() {
 
 	if *responses {
 		remote.CallbackEvent("Network.responseReceived", func(params godet.Params) {
-			url := params["response"].(map[string]interface{})["url"].(string)
+			resp := params["response"].(map[string]interface{})
+			url := resp["url"].(string)
 
 			log.Println("responseReceived",
 				params["type"],
-				limit(url, 80))
+				limit(url, 80),
+				"\n\t\t\t",
+				int(resp["status"].(float64)),
+				resp["mimeType"].(string))
 
-			if params["type"].(string) == "Image" {
-				go func() {
-					req := params["requestId"].(string)
-					res, err := remote.GetResponseBody(req)
-					if err != nil {
-						log.Println("Error getting responseBody", err)
-					} else {
-						log.Println("ResponseBody", len(res), limit(string(res), 10))
-					}
-				}()
-			}
+			/*
+				if params["type"].(string) == "Image" {
+					go func() {
+						req := params["requestId"].(string)
+						res, err := remote.GetResponseBody(req)
+						if err != nil {
+							log.Println("Error getting responseBody", err)
+						} else {
+							log.Println("ResponseBody", len(res), limit(string(res), 10))
+						}
+					}()
+				}
+			*/
 		})
 	}
 
@@ -243,6 +251,11 @@ func main() {
 		})
 	}
 
+	if *block != "" {
+		blocks := strings.Split(*block, "|")
+		remote.SetBlockedURLs(blocks...)
+	}
+
 	if flag.NArg() > 0 {
 		p := flag.Arg(0)
 
@@ -278,7 +291,6 @@ func main() {
 		remote.DOMEvents(true)
 		remote.LogEvents(true)
 	}
-
 
 	if *query != "" {
 		res, err := remote.GetDocument()

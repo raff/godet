@@ -738,6 +738,14 @@ func (remote *RemoteDebugger) EvaluateWrap(expr string) (interface{}, error) {
 	return remote.Evaluate(expr)
 }
 
+// SetBlockedURLs blocks URLs from loading (wildcards '*' are allowed)
+func (remote *RemoteDebugger) SetBlockedURLs(urls ...string) error {
+	_, err := remote.SendRequest("Network.setBlockedURLs", Params{
+		"urls": urls,
+	})
+	return err
+}
+
 // SetUserAgent overrides the default user agent.
 func (remote *RemoteDebugger) SetUserAgent(userAgent string) error {
 	_, err := remote.SendRequest("Network.setUserAgentOverride", Params{

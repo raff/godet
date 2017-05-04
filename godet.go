@@ -602,7 +602,7 @@ func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
 
 	if err != nil {
 		return nil, err
-	} else if res["base64Encoded"].(bool) {
+	} else if b, ok := res["base64Encoded"]; ok && b.(bool) {
 		return base64.StdEncoding.DecodeString(res["body"].(string))
 	} else {
 		return []byte(res["body"].(string)), nil

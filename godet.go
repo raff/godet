@@ -700,6 +700,29 @@ func (remote *RemoteDebugger) SetAttributeValue(nodeID int, name, value string) 
 	return err
 }
 
+// GetOuterHTML returns node's HTML markup.
+func (remote *RemoteDebugger) GetOuterHTML(nodeID int) (string, error) {
+	res, err := remote.SendRequest("DOM.getOuterHTML", Params{
+		"nodeId": nodeID,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return res["outerHTML"].(string), nil
+}
+
+// SetOuterHTML sets node HTML markup.
+func (remote *RemoteDebugger) SetOuterHTML(nodeID int, outerHTML string) error {
+	_, err := remote.SendRequest("DOM.setOuterHTML", Params{
+		"nodeId":    nodeID,
+		"outerHTML": outerHTML,
+	})
+
+	return err
+}
+
 // SendRune sends a character as keyboard input.
 func (remote *RemoteDebugger) SendRune(c rune) error {
 	if _, err := remote.SendRequest("Input.dispatchKeyEvent", Params{

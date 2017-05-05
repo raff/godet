@@ -29,6 +29,20 @@ func limit(s string, l int) string {
 	return s
 }
 
+func documentNode(remote *godet.RemoteDebugger, verbose bool) int {
+	res, err := remote.GetDocument()
+	if err != nil {
+		log.Fatal("error getting document: ", err)
+	}
+
+	if verbose {
+		pretty.PrettyPrint(res)
+	}
+
+	doc := simplejson.AsJson(res)
+	return doc.GetPath("root", "nodeId").MustInt(-1)
+}
+
 func main() {
 	var chromeapp string
 
@@ -89,6 +103,8 @@ func main() {
 	screenshot := flag.Bool("screenshot", false, "take a screenshot")
 	control := flag.Bool("control", false, "control navigation")
 	block := flag.String("block", "", "block specified URLs or pattenrs. Use '|' as separator")
+	html := flag.Bool("html", false, "get outer HTML for current page")
+	setHtml := flag.String("set-html", "", "set outer HTML for current page")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -293,18 +309,9 @@ func main() {
 	}
 
 	if *query != "" {
-		res, err := remote.GetDocument()
-		if err != nil {
-			log.Fatal("error getting document: ", err)
-		}
+		id := documentNode(remote, *verbose)
 
-		if *verbose {
-			pretty.PrettyPrint(res)
-		}
-
-		doc := simplejson.AsJson(res)
-		id := doc.GetPath("root", "nodeId").MustInt(-1)
-		res, err = remote.QuerySelector(id, *query)
+		res, err := remote.QuerySelector(id, *query)
 		if err != nil {
 			log.Fatal("error in querySelector: ", err)
 		}
@@ -329,6 +336,33 @@ func main() {
 		}
 
 		pretty.PrettyPrint(res)
+	}
+
+	if *setHtml != "" {
+		id := documentNode(remote, *verbose)
+
+		res, err := remote.QuerySelector(id, "html")
+		if err != nil {
+			log.Fatal("error in querySelector: ", err)
+		}
+
+		id = int(res["nodeId"].(float64))
+
+		err = remote.SetOuterHTML(id, *setHtml)
+		if err != nil {
+			log.Fatal("error in setOuterHTML: ", err)
+		}
+	}
+
+	if *html {
+		id := documentNode(remote, *verbose)
+
+		res, err := remote.GetOuterHTML(id)
+		if err != nil {
+			log.Fatal("error in getOuterHTML: ", err)
+		}
+
+		log.Println(res)
 	}
 
 	<-done

@@ -187,7 +187,7 @@ func (remote *RemoteDebugger) connectWs(tab *Tab) error {
 		} else {
 			for _, t := range tabs {
 				if tab.ID == t.ID {
-					tab = t
+					tab.WsURL = t.WsURL
 					break
 				}
 			}

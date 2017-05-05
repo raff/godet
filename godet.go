@@ -172,7 +172,7 @@ func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 }
 
 func (remote *RemoteDebugger) connectWs(tab *Tab) error {
-	if tab == nil {
+	if tab == nil || len(tab.WsURL) == 0 {
 		tabs, err := remote.TabList("page")
 		if err != nil {
 			return err
@@ -182,7 +182,16 @@ func (remote *RemoteDebugger) connectWs(tab *Tab) error {
 			return ErrorNoActiveTab
 		}
 
-		tab = tabs[0]
+		if tab == nil {
+			tab = tabs[0]
+		} else {
+			for _, t := range tabs {
+				if tab.ID == t.ID {
+					tab = t
+					break
+				}
+			}
+		}
 	}
 
 	if remote.ws != nil {
@@ -192,11 +201,15 @@ func (remote *RemoteDebugger) connectWs(tab *Tab) error {
 		}
 
 		if remote.verbose {
-			log.Println("disconnecting from current tab, id ", remote.current)
+			log.Println("disconnecting from current tab, id", remote.current)
 		}
 
-		remote.current = ""
-		_ = remote.ws.Close()
+		remote.Lock()
+		ws := remote.ws
+		remote.ws, remote.current = nil, ""
+		remote.Unlock()
+
+		_ = ws.Close()
 	}
 
 	if len(tab.WsURL) == 0 {
@@ -216,10 +229,20 @@ func (remote *RemoteDebugger) connectWs(tab *Tab) error {
 		return err
 	}
 
+	remote.Lock()
 	remote.ws = ws
 	remote.current = tab.ID
+	remote.Unlock()
+
 	go remote.readMessages()
 	return nil
+}
+
+func (remote *RemoteDebugger) socket() (ws *websocket.Conn) {
+	remote.Lock()
+	ws = remote.ws
+	remote.Unlock()
+	return
 }
 
 // Close the RemoteDebugger connection.
@@ -285,7 +308,8 @@ func (remote *RemoteDebugger) sendMessages() {
 			log.Println("SEND", string(bytes))
 		}
 
-		err = remote.ws.WriteMessage(websocket.TextMessage, bytes)
+		ws := remote.socket()
+		err = ws.WriteMessage(websocket.TextMessage, bytes)
 		if err != nil {
 			log.Println("write message:", err)
 		}
@@ -315,7 +339,7 @@ loop:
 			break loop
 
 		default:
-			_, bytes, err := remote.ws.ReadMessage()
+			_, bytes, err := remote.socket().ReadMessage()
 			if err != nil {
 				log.Println("read message:", err)
 				if permanentError(err) {

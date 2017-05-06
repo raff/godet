@@ -273,8 +273,9 @@ func main() {
 	if *screenshot {
 		remote.CallbackEvent("DOM.documentUpdated", func(params godet.Params) {
 			log.Println("document updated. taking screenshot...")
-			remote.SaveScreenshot("screenshot.png", 0644, 0, false)
-			remote.Close()
+			remote.SaveScreenshot("screenshot.png", 0644, 0, true)
+
+			done <- true
 		})
 	}
 
@@ -282,12 +283,15 @@ func main() {
 		remote.CallbackEvent("DOM.documentUpdated", func(params godet.Params) {
 			log.Println("document updated. saving as PDF...")
 			remote.SavePDF("page.pdf", 0644)
-			remote.Close()
+
+			done <- true
 		})
 	}
 
+	var site string
+
 	if flag.NArg() > 0 {
-		p := flag.Arg(0)
+		site = flag.Arg(0)
 
 		tabs, err := remote.TabList("page")
 		if err != nil {
@@ -295,16 +299,15 @@ func main() {
 		}
 
 		if len(tabs) == 0 || *newtab {
-			_, err = remote.NewTab(p)
+			_, err = remote.NewTab(site)
+			site = ""
 		} else {
 			tab := *seltab
 			if tab > len(tabs) {
 				tab = 0
 			}
 
-			if err = remote.ActivateTab(tabs[tab]); err == nil {
-				_, err = remote.Navigate(p)
-			}
+			err = remote.ActivateTab(tabs[tab])
 		}
 
 		if err != nil {
@@ -312,6 +315,9 @@ func main() {
 		}
 	}
 
+	//
+	// enable events AFTER creating/selecting a tab but BEFORE navigating to a page
+	//
 	if *allEvents {
 		remote.AllEvents(true)
 	} else {
@@ -320,6 +326,13 @@ func main() {
 		remote.PageEvents(true)
 		remote.DOMEvents(true)
 		remote.LogEvents(true)
+	}
+
+	if len(site) > 0 {
+		_, err = remote.Navigate(site)
+		if err != nil {
+			log.Fatal("error loading page: ", err)
+		}
 	}
 
 	if *query != "" {

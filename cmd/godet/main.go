@@ -101,10 +101,12 @@ func main() {
 	query := flag.String("query", "", "query against current document")
 	eval := flag.String("eval", "", "evaluate expression")
 	screenshot := flag.Bool("screenshot", false, "take a screenshot")
+	pdf := flag.Bool("pdf", false, "save current page as PDF")
 	control := flag.Bool("control", false, "control navigation")
 	block := flag.String("block", "", "block specified URLs or pattenrs. Use '|' as separator")
 	html := flag.Bool("html", false, "get outer HTML for current page")
 	setHtml := flag.String("set-html", "", "set outer HTML for current page")
+	wait := flag.Bool("wait", false, "wait for more events")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -136,6 +138,7 @@ func main() {
 	defer remote.Close()
 
 	done := make(chan bool)
+	should_wait := true
 
 	v, err := remote.Version()
 	if err != nil {
@@ -155,6 +158,7 @@ func main() {
 		}
 
 		pretty.PrettyPrint(tabs)
+		should_wait = false
 	}
 
 	if *domains {
@@ -164,6 +168,7 @@ func main() {
 		}
 
 		pretty.PrettyPrint(d)
+		should_wait = false
 	}
 
 	remote.CallbackEvent(godet.EventClosed, func(params godet.Params) {
@@ -252,13 +257,6 @@ func main() {
 		})
 	}
 
-	if *screenshot {
-		remote.CallbackEvent("DOM.documentUpdated", func(params godet.Params) {
-			log.Println("document updated. taking screenshot...")
-			remote.SaveScreenshot("screenshot.png", 0644, 0, false)
-		})
-	}
-
 	if *control {
 		remote.SetControlNavigation(true)
 
@@ -270,6 +268,22 @@ func main() {
 	if *block != "" {
 		blocks := strings.Split(*block, "|")
 		remote.SetBlockedURLs(blocks...)
+	}
+
+	if *screenshot {
+		remote.CallbackEvent("DOM.documentUpdated", func(params godet.Params) {
+			log.Println("document updated. taking screenshot...")
+			remote.SaveScreenshot("screenshot.png", 0644, 0, false)
+			remote.Close()
+		})
+	}
+
+	if *pdf {
+		remote.CallbackEvent("DOM.documentUpdated", func(params godet.Params) {
+			log.Println("document updated. saving as PDF...")
+			remote.SavePDF("page.pdf", 0644)
+			remote.Close()
+		})
 	}
 
 	if flag.NArg() > 0 {
@@ -327,6 +341,8 @@ func main() {
 
 			pretty.PrettyPrint(res)
 		}
+
+		should_wait = false
 	}
 
 	if *eval != "" {
@@ -336,6 +352,7 @@ func main() {
 		}
 
 		pretty.PrettyPrint(res)
+		should_wait = false
 	}
 
 	if *setHtml != "" {
@@ -352,6 +369,8 @@ func main() {
 		if err != nil {
 			log.Fatal("error in setOuterHTML: ", err)
 		}
+
+		should_wait = false
 	}
 
 	if *html {
@@ -363,8 +382,13 @@ func main() {
 		}
 
 		log.Println(res)
+		should_wait = false
 	}
 
-	<-done
+	if *wait || should_wait {
+		log.Println("Wait for events...")
+		<-done
+	}
+
 	log.Println("Closing")
 }

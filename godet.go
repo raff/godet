@@ -608,6 +608,26 @@ func (remote *RemoteDebugger) SaveScreenshot(filename string, perm os.FileMode, 
 	return ioutil.WriteFile(filename, rawScreenshot, perm)
 }
 
+// PrintToPDF print the current page as PDF.
+func (remote *RemoteDebugger) PrintToPDF() ([]byte, error) {
+	res, err := remote.SendRequest("Page.printToPDF", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return base64.StdEncoding.DecodeString(res["data"].(string))
+}
+
+// SavePDF print current page as PDF and save to file
+func (remote *RemoteDebugger) SavePDF(filename string, perm os.FileMode) error {
+	rawPDF, err := remote.PrintToPDF()
+	if err != nil {
+		return err
+	}
+
+	return ioutil.WriteFile(filename, rawPDF, perm)
+}
+
 // HandleJavaScriptDialog accepts or dismisses a Javascript initiated dialog.
 func (remote *RemoteDebugger) HandleJavaScriptDialog(accept bool, promptText string) error {
 	_, err := remote.SendRequest("Page.handleJavaScriptDialog", Params{

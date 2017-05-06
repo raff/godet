@@ -246,13 +246,22 @@ func (remote *RemoteDebugger) socket() (ws *websocket.Conn) {
 }
 
 // Close the RemoteDebugger connection.
-func (remote *RemoteDebugger) Close() error {
-	close(remote.closed)
-	err := remote.ws.Close()
+func (remote *RemoteDebugger) Close() (err error) {
+	remote.Lock()
+	ws := remote.ws
+	remote.ws = nil
+	remote.Unlock()
+
+	if ws != nil { // already closed
+		close(remote.closed)
+		err = ws.Close()
+	}
+
 	if remote.verbose {
 		httpclient.StopLogging()
 	}
-	return err
+
+	return
 }
 
 type wsMessage struct {

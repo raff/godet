@@ -79,6 +79,12 @@ res, _ := remote.EvaluateWrap(`
     console.log("hello from godet!")
     return 42;
 `)
-
 fmt.Println(res)
+
+// take a screenshot
+_ = remote.SaveScreenshot("screenshot.png", 0644, 0, true)
+
+// or save page as PDF
+_ = remote.SavePDF("page.pdf", 0644)
+
 ```

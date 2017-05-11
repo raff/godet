@@ -617,9 +617,63 @@ func (remote *RemoteDebugger) SaveScreenshot(filename string, perm os.FileMode, 
 	return ioutil.WriteFile(filename, rawScreenshot, perm)
 }
 
+type PrintToPDFOption func(map[string]interface{})
+
+func LandscapeMode() PrintToPDFOption {
+	return func(o map[string]interface{}) {
+		o["landscape"] = true
+	}
+}
+
+func PortraitMode() PrintToPDFOption {
+	return func(o map[string]interface{}) {
+		o["landscape"] = false
+	}
+}
+
+func DisplayHeaderFooter() PrintToPDFOption {
+	return func(o map[string]interface{}) {
+		o["displayHeaderFooter"] = true
+	}
+}
+
+func Scale(n float64) PrintToPDFOption {
+	return func(o map[string]interface{}) {
+		o["scale"] = n
+	}
+}
+
+func Dimensions(width, height float64) PrintToPDFOption {
+	return func(o map[string]interface{}) {
+		o["paperWidth"] = width
+		o["paperHeight"] = height
+	}
+}
+
+func Margins(top, bottom, left, right float64) PrintToPDFOption {
+	return func(o map[string]interface{}) {
+		o["marginTop"] = top
+		o["marginBottom"] = bottom
+		o["marginLeft"] = left
+		o["marginRight"] = right
+	}
+}
+
+func PageRanges(ranges string) PrintToPDFOption {
+	return func(o map[string]interface{}) {
+		o["pageRanges"] = ranges
+	}
+}
+
 // PrintToPDF print the current page as PDF.
-func (remote *RemoteDebugger) PrintToPDF() ([]byte, error) {
-	res, err := remote.SendRequest("Page.printToPDF", nil)
+func (remote *RemoteDebugger) PrintToPDF(options ...PrintToPDFOption) ([]byte, error) {
+	mOptions := map[string]interface{}{}
+
+	for _, o := range options {
+		o(mOptions)
+	}
+
+	res, err := remote.SendRequest("Page.printToPDF", mOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -628,8 +682,8 @@ func (remote *RemoteDebugger) PrintToPDF() ([]byte, error) {
 }
 
 // SavePDF print current page as PDF and save to file
-func (remote *RemoteDebugger) SavePDF(filename string, perm os.FileMode) error {
-	rawPDF, err := remote.PrintToPDF()
+func (remote *RemoteDebugger) SavePDF(filename string, perm os.FileMode, options ...PrintToPDFOption) error {
+	rawPDF, err := remote.PrintToPDF(options...)
 	if err != nil {
 		return err
 	}

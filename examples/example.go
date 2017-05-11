@@ -2,6 +2,7 @@
 package main
 
 import "fmt"
+import "time"
 
 import "github.com/raff/godet"
 
@@ -75,6 +76,8 @@ func main() {
 	// take a screenshot
 	_ = remote.SaveScreenshot("screenshot.png", 0644, 0, true)
 
+	time.Sleep(time.Second)
+
 	// or save page as PDF
-	_ = remote.SavePDF("page.pdf", 0644)
+	_ = remote.SavePDF("page.pdf", 0644, godet.PortraitMode(), godet.Scale(0.5), godet.Dimensions(6.0, 2.0))
 }

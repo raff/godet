@@ -102,7 +102,7 @@ func main() {
 	eval := flag.String("eval", "", "evaluate expression")
 	screenshot := flag.Bool("screenshot", false, "take a screenshot")
 	pdf := flag.Bool("pdf", false, "save current page as PDF")
-	control := flag.Bool("control", false, "control navigation")
+	control := flag.String("control", "", "control navigation (proceed,cancel,cancelIgnore)")
 	block := flag.String("block", "", "block specified URLs or pattenrs. Use '|' as separator")
 	html := flag.Bool("html", false, "get outer HTML for current page")
 	setHtml := flag.String("set-html", "", "set outer HTML for current page")
@@ -257,11 +257,23 @@ func main() {
 		})
 	}
 
-	if *control {
-		remote.SetControlNavigation(true)
+	if *control != "" {
+		remote.SetControlNavigations(true)
+		navigationResponse := godet.NavigationProceed
+
+		switch *control {
+		case "proceed":
+			navigationResponse = godet.NavigationProceed
+		case "cancel":
+			navigationResponse = godet.NavigationCancel
+		case "cancelIgnore":
+			navigationResponse = godet.NavigationCancelAndIgnore
+		}
 
 		remote.CallbackEvent("Page.navigationRequested", func(params godet.Params) {
-			log.Println("navigation requested for", params["url"])
+			log.Println("navigation requested for", params.String("url"), navigationResponse)
+
+			remote.ProcessNavigation(params.Int("navigationId"), navigationResponse)
 		})
 	}
 

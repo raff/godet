@@ -142,6 +142,14 @@ type RemoteDebugger struct {
 // Params is a type alias for the event params structure.
 type Params map[string]interface{}
 
+func (p Params) String(k string) string {
+	return p[k].(string)
+}
+
+func (p Params) Int(k string) int {
+	return int(p[k].(float64))
+}
+
 // EventCallback represents a callback event, associated with a method.
 type EventCallback func(params Params)
 
@@ -562,9 +570,9 @@ func (remote *RemoteDebugger) Reload() error {
 	return err
 }
 
-// SetControlNavigation toggles navigation throttling which allows programatic control over navigation and redirect response.
-func (remote *RemoteDebugger) SetControlNavigation(enabled bool) error {
-	_, err := remote.SendRequest("Page.setControlNavigation", Params{
+// SetControlNavigations toggles navigation throttling which allows programatic control over navigation and redirect response.
+func (remote *RemoteDebugger) SetControlNavigations(enabled bool) error {
+	_, err := remote.SendRequest("Page.setControlNavigations", Params{
 		"enabled": enabled,
 	})
 

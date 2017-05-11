@@ -9,8 +9,8 @@ Remote client for Chrome DevTools
 http://godoc.org/github.com/raff/godet
 
 ## Example
-A pretty complete example is available at `cmd/godet/main.go`.
-This example is available at `examples/example.go`.
+A pretty complete example is available at [`cmd/godet/main.go`](https://github.com/raff/godet/blob/master/cmd/godet/main.go).
+This example is available at [`examples/example.go`](https://github.com/raff/godet/blob/master/examples/example.go).
 
 ```go
 import "github.com/raff/godet"

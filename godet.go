@@ -37,6 +37,8 @@ var (
 	ErrorNoActiveTab = errors.New("no active tab")
 	// ErrorNoWsURL is returned if the active tab has no websocket URL
 	ErrorNoWsURL = errors.New("no websocket URL")
+	// ErrorNoResponse is returned if a method was expecting a response but got nil instead
+	ErrorNoResponse = errors.New("no response")
 )
 
 // NavigationResponse define the type for ProcessNavigation `response`
@@ -56,6 +58,14 @@ func unmarshal(payload []byte) (map[string]interface{}, error) {
 		log.Println("unmarshal", string(payload), len(payload), err)
 	}
 	return response, err
+}
+
+func responseError(resp *httpclient.HttpResponse, err error) (*httpclient.HttpResponse, error) {
+	if err == nil {
+		return resp, resp.ResponseError()
+	}
+
+	return resp, err
 }
 
 // Version holds the DevTools version information.
@@ -437,7 +447,7 @@ func (remote *RemoteDebugger) processEvents() {
 
 // Version returns version information (protocol, browser, etc.).
 func (remote *RemoteDebugger) Version() (*Version, error) {
-	resp, err := remote.http.Get("/json/version", nil, nil)
+	resp, err := responseError(remote.http.Get("/json/version", nil, nil))
 	if err != nil {
 		return nil, err
 	}
@@ -451,13 +461,28 @@ func (remote *RemoteDebugger) Version() (*Version, error) {
 	return &version, nil
 }
 
+// Protocol returns the DevTools protocol specification
+func (remote *RemoteDebugger) Protocol() (map[string]interface{}, error) {
+	resp, err := responseError(remote.http.Get("/json/protocol", nil, nil))
+	if err != nil {
+		return nil, err
+	}
+
+	var proto map[string]interface{}
+	if err = decode(resp, &proto); err != nil {
+		return nil, err
+	}
+
+	return proto, nil
+}
+
 // TabList returns a list of opened tabs/pages.
 // If filter is not empty, only tabs of the specified type are returned (i.e. "page").
 //
 // Note that tabs are ordered by activitiy time (most recently used first) so the
 // current tab is the first one of type "page".
 func (remote *RemoteDebugger) TabList(filter string) ([]*Tab, error) {
-	resp, err := remote.http.Get("/json/list", nil, nil)
+	resp, err := responseError(remote.http.Get("/json/list", nil, nil))
 	if err != nil {
 		return nil, err
 	}
@@ -485,7 +510,7 @@ func (remote *RemoteDebugger) TabList(filter string) ([]*Tab, error) {
 
 // ActivateTab activates the specified tab.
 func (remote *RemoteDebugger) ActivateTab(tab *Tab) error {
-	resp, err := remote.http.Get("/json/activate/"+tab.ID, nil, nil)
+	resp, err := responseError(remote.http.Get("/json/activate/"+tab.ID, nil, nil))
 	resp.Close()
 
 	if err == nil {
@@ -497,7 +522,7 @@ func (remote *RemoteDebugger) ActivateTab(tab *Tab) error {
 
 // CloseTab closes the specified tab.
 func (remote *RemoteDebugger) CloseTab(tab *Tab) error {
-	resp, err := remote.http.Get("/json/close/"+tab.ID, nil, nil)
+	resp, err := responseError(remote.http.Get("/json/close/"+tab.ID, nil, nil))
 	resp.Close()
 	return err
 }
@@ -509,7 +534,7 @@ func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
 		path += "?" + url
 	}
 
-	resp, err := remote.http.Do(remote.http.Request("GET", path, nil, nil))
+	resp, err := responseError(remote.http.Do(remote.http.Request("GET", path, nil, nil)))
 	if err != nil {
 		return nil, err
 	}
@@ -594,13 +619,19 @@ func (remote *RemoteDebugger) CaptureScreenshot(format string, quality int, from
 	if format == "" {
 		format = "png"
 	}
+
 	res, err := remote.SendRequest("Page.captureScreenshot", Params{
 		"format":      format,
 		"quality":     quality,
 		"fromSurface": fromSurface,
 	})
+
 	if err != nil {
 		return nil, err
+	}
+
+	if res == nil {
+		return nil, ErrorNoResponse
 	}
 
 	return base64.StdEncoding.DecodeString(res["data"].(string))
@@ -684,6 +715,10 @@ func (remote *RemoteDebugger) PrintToPDF(options ...PrintToPDFOption) ([]byte, e
 	res, err := remote.SendRequest("Page.printToPDF", mOptions)
 	if err != nil {
 		return nil, err
+	}
+
+	if res == nil {
+		return nil, ErrorNoResponse
 	}
 
 	return base64.StdEncoding.DecodeString(res["data"].(string))

@@ -86,9 +86,11 @@ func main() {
 	}
 
 	cmd := flag.String("cmd", chromeapp, "command to execute to start the browser")
+	headless := flag.Bool("headless", true, "headless mode")
 	port := flag.String("port", "localhost:9222", "Chrome remote debugger port")
 	verbose := flag.Bool("verbose", false, "verbose logging")
 	version := flag.Bool("version", false, "display remote devtools version")
+	protocol := flag.Bool("protocol", false, "display the DevTools protocol")
 	listtabs := flag.Bool("tabs", false, "show list of open tabs")
 	seltab := flag.Int("tab", 0, "select specified tab if available")
 	newtab := flag.Bool("new", false, "always open a new tab")
@@ -110,6 +112,10 @@ func main() {
 	flag.Parse()
 
 	if *cmd != "" {
+		if !*headless {
+			*cmd = strings.Replace(*cmd, " --headless ", " ", -1)
+		}
+
 		if err := runCommand(*cmd); err != nil {
 			log.Println("cannot start browser", err)
 		}
@@ -149,6 +155,16 @@ func main() {
 		pretty.PrettyPrint(v)
 	} else {
 		log.Println("connected to", v.Browser, "protocol version", v.ProtocolVersion)
+	}
+
+	if *protocol {
+		p, err := remote.Protocol()
+		if err != nil {
+			log.Fatal("cannot get protocol: ", err)
+		}
+
+		pretty.PrettyPrint(p)
+		should_wait = false
 	}
 
 	if *listtabs {

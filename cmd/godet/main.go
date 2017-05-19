@@ -94,6 +94,7 @@ func main() {
 	listtabs := flag.Bool("tabs", false, "show list of open tabs")
 	seltab := flag.Int("tab", 0, "select specified tab if available")
 	newtab := flag.Bool("new", false, "always open a new tab")
+	history := flag.Bool("history", false, "display page history")
 	filter := flag.String("filter", "page", "filter tab list")
 	domains := flag.Bool("domains", false, "show list of available domains")
 	requests := flag.Bool("requests", false, "show request notifications")
@@ -184,6 +185,17 @@ func main() {
 		}
 
 		pretty.PrettyPrint(d)
+		should_wait = false
+	}
+
+	if *history {
+		curr, entries, err := remote.GetNavigationHistory()
+		if err != nil {
+			log.Fatal("cannot get history: ", err)
+		}
+
+		fmt.Println("current entry:", curr)
+		pretty.PrettyPrint(entries)
 		should_wait = false
 	}
 

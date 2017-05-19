@@ -94,6 +94,13 @@ type Tab struct {
 	DevURL      string `json:"devtoolsFrontendUrl"`
 }
 
+// NavigationEntry represent a navigation history entry.
+type NavigationEntry struct {
+	ID    int64  `json:"id"`
+	Url   string `json:"url"`
+	Title string `json:"title"`
+}
+
 // Profile represents a profile data structure.
 type Profile struct {
 	Nodes      []ProfileNode `json:"nodes"`
@@ -593,6 +600,26 @@ func (remote *RemoteDebugger) Reload() error {
 	})
 
 	return err
+}
+
+// GetNavigationHistory returns navigation history for the current page.
+func (remote *RemoteDebugger) GetNavigationHistory() (int, []NavigationEntry, error) {
+	rawReply, err := remote.sendRawReplyRequest("Page.getNavigationHistory", nil)
+
+	if err != nil {
+		return 0, nil, err
+	}
+
+	var history struct {
+		Current int64             `json:"currentIndex"`
+		Entries []NavigationEntry `json:"entries"`
+	}
+
+	if err := json.Unmarshal(rawReply, &history); err != nil {
+		return 0, nil, err
+	}
+
+	return int(history.Current), history.Entries, nil
 }
 
 // SetControlNavigations toggles navigation throttling which allows programatic control over navigation and redirect response.

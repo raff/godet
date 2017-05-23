@@ -110,6 +110,9 @@ func main() {
 	html := flag.Bool("html", false, "get outer HTML for current page")
 	setHtml := flag.String("set-html", "", "set outer HTML for current page")
 	wait := flag.Bool("wait", false, "wait for more events")
+	box := flag.Bool("box", false, "get box model for document")
+	styles := flag.Bool("styles", false, "get computed style for document")
+	pause := flag.Duration("pause", 5*time.Second, "wait this amount of time before proceding")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -145,7 +148,9 @@ func main() {
 	defer remote.Close()
 
 	done := make(chan bool)
-	should_wait := true
+	should_wait := *wait
+
+	var pwait chan bool
 
 	v, err := remote.Version()
 	if err != nil {
@@ -202,6 +207,10 @@ func main() {
 	remote.CallbackEvent(godet.EventClosed, func(params godet.Params) {
 		log.Println("RemoteDebugger connection terminated.")
 		done <- true
+	})
+
+	remote.CallbackEvent("Emulation.virtualTimeBudgetExpired", func(params godet.Params) {
+		pwait <- true
 	})
 
 	if *requests {
@@ -310,24 +319,6 @@ func main() {
 		remote.SetBlockedURLs(blocks...)
 	}
 
-	if *screenshot {
-		remote.CallbackEvent("DOM.documentUpdated", func(params godet.Params) {
-			log.Println("document updated. taking screenshot...")
-			remote.SaveScreenshot("screenshot.png", 0644, 0, true)
-
-			done <- true
-		})
-	}
-
-	if *pdf {
-		remote.CallbackEvent("DOM.documentUpdated", func(params godet.Params) {
-			log.Println("document updated. saving as PDF...")
-			remote.SavePDF("page.pdf", 0644)
-
-			done <- true
-		})
-	}
-
 	var site string
 
 	if flag.NArg() > 0 {
@@ -366,6 +357,14 @@ func main() {
 		remote.PageEvents(true)
 		remote.DOMEvents(true)
 		remote.LogEvents(true)
+		remote.EmulationEvents(true)
+	}
+
+	if *pause > 0 {
+		pwait = make(chan bool)
+
+		remote.SetVirtualTimePolicy(godet.VirtualTimePolicyPauseIfNetworkFetchesPending,
+			int(*pause/time.Millisecond))
 	}
 
 	if len(site) > 0 {
@@ -373,6 +372,11 @@ func main() {
 		if err != nil {
 			log.Fatal("error loading page: ", err)
 		}
+	}
+
+	if pwait != nil {
+		fmt.Println("Pause", *pause)
+		<-pwait
 	}
 
 	if *query != "" {
@@ -435,6 +439,81 @@ func main() {
 		}
 
 		log.Println(res)
+		should_wait = false
+	}
+
+	if *box {
+		id := documentNode(remote, *verbose)
+
+		res, err := remote.QuerySelector(id, "html")
+		if err != nil {
+			log.Fatal("error in querySelector: ", err)
+		}
+
+		id = int(res["nodeId"].(float64))
+
+		res, err = remote.GetBoxModel(id)
+		if err != nil {
+			log.Fatal("error in getBoxModel: ", err)
+		}
+
+		pretty.PrettyPrint(res)
+		should_wait = false
+	}
+
+	if *styles {
+		id := documentNode(remote, *verbose)
+
+		res, err := remote.QuerySelector(id, "html")
+		if err != nil {
+			log.Fatal("error in querySelector: ", err)
+		}
+
+		id = int(res["nodeId"].(float64))
+
+		res, err = remote.GetComputedStyleForNode(id)
+		if err != nil {
+			log.Fatal("error in getComputedStyleForNode: ", err)
+		}
+
+		pretty.PrettyPrint(res)
+		should_wait = false
+	}
+
+	if *screenshot {
+		id := documentNode(remote, *verbose)
+
+		res, err := remote.QuerySelector(id, "html")
+		if err != nil {
+			log.Fatal("error in querySelector: ", err)
+		}
+
+		id = int(res["nodeId"].(float64))
+
+		res, err = remote.GetBoxModel(id)
+		if err != nil {
+			log.Fatal("error in getBoxModel: ", err)
+		}
+
+		if res == nil {
+			log.Println("BoxModel not available")
+		} else {
+			res = res["model"].(map[string]interface{})
+			width := int(res["width"].(float64))
+			height := int(res["height"].(float64))
+
+			err = remote.SetVisibleSize(width, height)
+			if err != nil {
+				log.Fatal("error in setVisibleSize: ", err)
+			}
+		}
+
+		remote.SaveScreenshot("screenshot.png", 0644, 0, true)
+		should_wait = false
+	}
+
+	if *pdf {
+		remote.SavePDF("page.pdf", 0644)
 		should_wait = false
 	}
 

@@ -30,6 +30,13 @@ const (
 	NavigationCancel = NavigationResponse("Cancel")
 	// NavigationCancelAndIgnore cancels the navigation and makes the requester of the navigation acts like the request was never made.
 	NavigationCancelAndIgnore = NavigationResponse("CancelAndIgnore")
+
+	VirtualTimePolicyAdvance = VirtualTimePolicy("advance")
+	// VirtualTimePolicyAdvance: If the scheduler runs out of immediate work, the virtual time base may fast forward to allow the next delayed task (if any) to run
+	VirtualTimePolicyPause = VirtualTimePolicy("pause")
+	// VirtualTimePolicyPause: The virtual time base may not advance
+	VirtualTimePolicyPauseIfNetworkFetchesPending = VirtualTimePolicy("pauseIfNetworkFetchesPending")
+	// VirtualTimePolicyPauseIfNetworkFetchesPending: The virtual time base may not advance if there are any pending resource fetches.
 )
 
 var (
@@ -43,6 +50,9 @@ var (
 
 // NavigationResponse define the type for ProcessNavigation `response`
 type NavigationResponse string
+
+// VirtualTimePolicy define the type for Emulation.SetVirtualTimePolicy
+type VirtualTimePolicy string
 
 func decode(resp *httpclient.HttpResponse, v interface{}) error {
 	err := json.NewDecoder(resp.Body).Decode(v)
@@ -306,7 +316,7 @@ func (remote *RemoteDebugger) SendRequest(method string, params Params) (map[str
 	return unmarshal(rawReply)
 }
 
-// sendRequest sends a request and returns the reply bytes.
+// sendRawReplyRequest sends a request and returns the reply bytes.
 func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) ([]byte, error) {
 	remote.Lock()
 	reqID := remote.reqID
@@ -876,6 +886,44 @@ func (remote *RemoteDebugger) SetOuterHTML(nodeID int, outerHTML string) error {
 	return err
 }
 
+// GetBoxModel returns boxes for a DOM node identified by nodeId.
+func (remote *RemoteDebugger) GetBoxModel(nodeID int) (map[string]interface{}, error) {
+	return remote.SendRequest("DOM.getBoxModel", Params{
+		"nodeId": nodeID,
+	})
+}
+
+// GetComputedStyleForNode returns the computed style for a DOM node identified by nodeId.
+func (remote *RemoteDebugger) GetComputedStyleForNode(nodeID int) (map[string]interface{}, error) {
+	return remote.SendRequest("CSS.getComputedStyleForNode", Params{
+		"nodeId": nodeID,
+	})
+}
+
+// SetVisibleSize resizes the frame/viewport of the page.
+// Note that this does not affect the frame's container (e.g. browser window).
+// Can be used to produce screenshots of the specified size.
+func (remote *RemoteDebugger) SetVisibleSize(width, height int) error {
+	_, err := remote.SendRequest("Emulation.setVisibleSize", Params{
+		"width":  float64(width),
+		"height": float64(height),
+	})
+
+	return err
+}
+
+// SetVirtualTimePolicy turns on virtual time for all frames (replacing real-time with a synthetic time source) and sets the current virtual time policy. Note this supersedes any previous time budget.
+func (remote *RemoteDebugger) SetVirtualTimePolicy(policy VirtualTimePolicy, budget int) error {
+	params := Params{"policy": policy}
+
+	if budget > 0 {
+		params["budget"] = float64(budget)
+	}
+
+	_, err := remote.SendRequest("Emulation.setVirtualTimePolicy", params)
+	return err
+}
+
 // SendRune sends a character as keyboard input.
 func (remote *RemoteDebugger) SendRune(c rune) error {
 	if _, err := remote.SendRequest("Input.dispatchKeyEvent", Params{
@@ -1049,4 +1097,9 @@ func (remote *RemoteDebugger) LogEvents(enable bool) error {
 // ProfilerEvents enables Profiler events listening.
 func (remote *RemoteDebugger) ProfilerEvents(enable bool) error {
 	return remote.DomainEvents("Profiler", enable)
+}
+
+// EmulationEvents enables Emulation events listening.
+func (remote *RemoteDebugger) EmulationEvents(enable bool) error {
+	return remote.DomainEvents("Emulation", enable)
 }

@@ -46,6 +46,9 @@ var (
 	ErrorNoWsURL = errors.New("no websocket URL")
 	// ErrorNoResponse is returned if a method was expecting a response but got nil instead
 	ErrorNoResponse = errors.New("no response")
+
+	MaxReadBufferSize  = 0          // default gorilla/websocket buffer size
+	MaxWriteBufferSize = 100 * 1024 // this should be large enough to send large scripts
 )
 
 // NavigationResponse define the type for ProcessNavigation `response`
@@ -256,7 +259,12 @@ func (remote *RemoteDebugger) connectWs(tab *Tab) error {
 		log.Println("connecting to tab", tab.WsURL)
 	}
 
-	ws, _, err := websocket.DefaultDialer.Dial(tab.WsURL, nil)
+	d := &websocket.Dialer{
+		ReadBufferSize:  MaxReadBufferSize,
+		WriteBufferSize: MaxWriteBufferSize,
+	}
+
+	ws, _, err := d.Dial(tab.WsURL, nil)
 	if err != nil {
 		if remote.verbose {
 			log.Println("dial error:", err)

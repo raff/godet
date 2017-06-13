@@ -31,6 +31,19 @@ const (
 	// NavigationCancelAndIgnore cancels the navigation and makes the requester of the navigation acts like the request was never made.
 	NavigationCancelAndIgnore = NavigationResponse("CancelAndIgnore")
 
+	ErrorReasonFailed               = ErrorReason("Failed")
+	ErrorReasonAborted              = ErrorReason("Aborted")
+	ErrorReasonTimedOut             = ErrorReason("TimedOut")
+	ErrorReasonAccessDenied         = ErrorReason("AccessDenied")
+	ErrorReasonConnectionClosed     = ErrorReason("ConnectionClosed")
+	ErrorReasonConnectionReset      = ErrorReason("ConnectionReset")
+	ErrorReasonConnectionRefused    = ErrorReason("ConnectionRefused")
+	ErrorReasonConnectionAborted    = ErrorReason("ConnectionAborted")
+	ErrorReasonConnectionFailed     = ErrorReason("ConnectionFailed")
+	ErrorReasonNameNotResolved      = ErrorReason("NameNotResolved")
+	ErrorReasonInternetDisconnected = ErrorReason("InternetDisconnected")
+	ErrorReasonAddressUnreachable   = ErrorReason("AddressUnreachable")
+
 	VirtualTimePolicyAdvance = VirtualTimePolicy("advance")
 	// VirtualTimePolicyAdvance: If the scheduler runs out of immediate work, the virtual time base may fast forward to allow the next delayed task (if any) to run
 	VirtualTimePolicyPause = VirtualTimePolicy("pause")
@@ -53,6 +66,8 @@ var (
 
 // NavigationResponse define the type for ProcessNavigation `response`
 type NavigationResponse string
+
+type ErrorReason string
 
 // VirtualTimePolicy define the type for Emulation.SetVirtualTimePolicy
 type VirtualTimePolicy string
@@ -178,6 +193,10 @@ func (p Params) String(k string) string {
 
 func (p Params) Int(k string) int {
 	return int(p[k].(float64))
+}
+
+func (p Params) Map(k string) map[string]interface{} {
+	return p[k].(map[string]interface{})
 }
 
 // EventCallback represents a callback event, associated with a method.
@@ -802,6 +821,63 @@ func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
 	} else {
 		return []byte(res["body"].(string)), nil
 	}
+}
+
+// EnableRequestInterception enables interception, modification or cancellation of network requests
+func (remote *RemoteDebugger) EnableRequestInterception(enabled bool) error {
+	_, err := remote.SendRequest("Network.enableRequestInterception", Params{
+		"enabled": enabled,
+	})
+
+	return err
+}
+
+// ContinueInterceptedRequest is the response to Network.requestIntercepted
+// which either modifies the request to continue with any modifications, or blocks it,
+// or completes it with the provided response bytes.
+//
+// If a network fetch occurs as a result which encounters a redirect an additional Network.requestIntercepted
+// event will be sent with the same InterceptionId.
+//
+// Parameters:
+//  errorReason ErrorReason - if set this causes the request to fail with the given reason.
+//  rawResponse string - if set the requests completes using with the provided base64 encoded raw response, including HTTP status line and headers etc...
+//  url string - if set the request url will be modified in a way that's not observable by page.
+//  method string - if set this allows the request method to be overridden.
+//  postData string - if set this allows postData to be set.
+//  headers Headers - if set this allows the request headers to be changed.
+func (remote *RemoteDebugger) ContinueInterceptedRequest(interceptionId string,
+	errorReason ErrorReason,
+	rawResponse string,
+	url string,
+	method string,
+	postData string,
+	headers map[string]string) error {
+	params := Params{
+		"interceptionId": interceptionId,
+	}
+
+	if errorReason != "" {
+		params["errorReason"] = string(errorReason)
+	}
+	if rawResponse != "" {
+		params["rawResponse"] = rawResponse
+	}
+	if url != "" {
+		params["url"] = url
+	}
+	if method != "" {
+		params["method"] = method
+	}
+	if postData != "" {
+		params["postData"] = postData
+	}
+	if headers != nil {
+		params["headers"] = headers
+	}
+
+	_, err := remote.SendRequest("Network.continueInterceptedRequest", params)
+	return err
 }
 
 // GetDocument gets the "Document" object as a DevTool node.

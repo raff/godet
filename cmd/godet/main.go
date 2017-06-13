@@ -107,6 +107,7 @@ func main() {
 	pdf := flag.Bool("pdf", false, "save current page as PDF")
 	control := flag.String("control", "", "control navigation (proceed,cancel,cancelIgnore)")
 	block := flag.String("block", "", "block specified URLs or pattenrs. Use '|' as separator")
+	intercept := flag.Bool("intercept", false, "enable request interception")
 	html := flag.Bool("html", false, "get outer HTML for current page")
 	setHtml := flag.String("set-html", "", "set outer HTML for current page")
 	wait := flag.Bool("wait", false, "wait for more events")
@@ -218,13 +219,13 @@ func main() {
 			log.Println("requestWillBeSent",
 				params["type"],
 				params["documentURL"],
-				params["request"].(map[string]interface{})["url"])
+				params.Map("request")["url"])
 		})
 	}
 
 	if *responses {
 		remote.CallbackEvent("Network.responseReceived", func(params godet.Params) {
-			resp := params["response"].(map[string]interface{})
+			resp := params.Map("response")
 			url := resp["url"].(string)
 
 			log.Println("responseReceived",
@@ -252,7 +253,7 @@ func main() {
 
 	if *logev {
 		remote.CallbackEvent("Log.entryAdded", func(params godet.Params) {
-			entry := params["entry"].(map[string]interface{})
+			entry := params.Map("entry")
 			log.Println("LOG", entry["type"], entry["level"], entry["text"])
 		})
 
@@ -358,6 +359,19 @@ func main() {
 		remote.DOMEvents(true)
 		remote.LogEvents(true)
 		remote.EmulationEvents(true)
+	}
+
+	if *intercept {
+		remote.EnableRequestInterception(true)
+
+		remote.CallbackEvent("Network.requestIntercepted", func(params godet.Params) {
+			log.Println("request intercepted for",
+				params["InterceptionId"],
+				params["resourceType"],
+				params.Map("request")["url"])
+
+                        remote.ContinueInterceptedRequest(params.String("InterceptionId"), "", "", "", "", "", nil)
+		})
 	}
 
 	if *pause > 0 {

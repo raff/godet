@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
@@ -107,7 +108,7 @@ func main() {
 	pdf := flag.Bool("pdf", false, "save current page as PDF")
 	control := flag.String("control", "", "control navigation (proceed,cancel,cancelIgnore)")
 	block := flag.String("block", "", "block specified URLs or pattenrs. Use '|' as separator")
-	intercept := flag.Bool("intercept", false, "enable request interception")
+	intercept := flag.String("intercept", "", "enable request interception and respond according to request type - use type:response,type:response,...\n\t  type:[Document,Stylesheet,Image,Media,Font,Script,TextTrack,XHR,Fetch,EventSource,WebSocket,Manifest,Other]\n\t  response:[Failed,Aborted,TimedOut,AccessDenied,ConnectionClosed,ConnectionReset,ConnectionRefused,ConnectionAborted,ConnectionFailed,NameNotResolved,InternetDisconnected,AddressUnreachable]")
 	html := flag.Bool("html", false, "get outer HTML for current page")
 	setHtml := flag.String("set-html", "", "set outer HTML for current page")
 	wait := flag.Bool("wait", false, "wait for more events")
@@ -236,9 +237,9 @@ func main() {
 				resp["mimeType"].(string))
 
 			/*
-				if params["type"].(string) == "Image" {
+				if params.String("type") == "Image" {
 					go func() {
-						req := params["requestId"].(string)
+						req := params.String("requestId")
 						res, err := remote.GetResponseBody(req)
 						if err != nil {
 							log.Println("Error getting responseBody", err)
@@ -295,26 +296,6 @@ func main() {
 		})
 	}
 
-	if *control != "" {
-		remote.SetControlNavigations(true)
-		navigationResponse := godet.NavigationProceed
-
-		switch *control {
-		case "proceed":
-			navigationResponse = godet.NavigationProceed
-		case "cancel":
-			navigationResponse = godet.NavigationCancel
-		case "cancelIgnore":
-			navigationResponse = godet.NavigationCancelAndIgnore
-		}
-
-		remote.CallbackEvent("Page.navigationRequested", func(params godet.Params) {
-			log.Println("navigation requested for", params.String("url"), navigationResponse)
-
-			remote.ProcessNavigation(params.Int("navigationId"), navigationResponse)
-		})
-	}
-
 	if *block != "" {
 		blocks := strings.Split(*block, "|")
 		remote.SetBlockedURLs(blocks...)
@@ -361,16 +342,49 @@ func main() {
 		remote.EmulationEvents(true)
 	}
 
-	if *intercept {
+	if *control != "" {
+		remote.SetControlNavigations(true)
+		navigationResponse := godet.NavigationProceed
+
+		switch *control {
+		case "proceed":
+			navigationResponse = godet.NavigationProceed
+		case "cancel":
+			navigationResponse = godet.NavigationCancel
+		case "cancelIgnore":
+			navigationResponse = godet.NavigationCancelAndIgnore
+		}
+
+		remote.CallbackEvent("Page.navigationRequested", func(params godet.Params) {
+			log.Println("navigation requested for", params.String("url"), navigationResponse)
+
+			remote.ProcessNavigation(params.Int("navigationId"), navigationResponse)
+		})
+	}
+
+	if *intercept != "" {
 		remote.EnableRequestInterception(true)
+		responses := map[string]string{}
+
+		if strings.Contains(*intercept, ":") { // type:response
+			matches := regexp.MustCompile(`(\w+):(\w+),?`).FindAllStringSubmatch(*intercept, -1)
+
+			for _, m := range matches {
+				responses[m[1]] = m[2]
+			}
+		} // else, we just log the intercept requests
 
 		remote.CallbackEvent("Network.requestIntercepted", func(params godet.Params) {
-			log.Println("request intercepted for",
-				params["InterceptionId"],
-				params["resourceType"],
-				params.Map("request")["url"])
+			iid := params.String("InterceptionId")
+			rtype := params.String("resourceType")
+			reason := responses[rtype]
 
-                        remote.ContinueInterceptedRequest(params.String("InterceptionId"), "", "", "", "", "", nil)
+			log.Println("request intercepted for", iid, rtype, params.Map("request")["url"])
+			if reason != "" {
+				log.Println("  abort with reason", reason)
+			}
+
+			remote.ContinueInterceptedRequest(params.String("InterceptionId"), godet.ErrorReason(reason), "", "", "", "", nil)
 		})
 	}
 

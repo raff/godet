@@ -375,7 +375,7 @@ func main() {
 		} // else, we just log the intercept requests
 
 		remote.CallbackEvent("Network.requestIntercepted", func(params godet.Params) {
-			iid := params.String("InterceptionId")
+			iid := params.String("interceptionId")
 			rtype := params.String("resourceType")
 			reason := responses[rtype]
 
@@ -384,7 +384,7 @@ func main() {
 				log.Println("  abort with reason", reason)
 			}
 
-			remote.ContinueInterceptedRequest(params.String("InterceptionId"), godet.ErrorReason(reason), "", "", "", "", nil)
+			remote.ContinueInterceptedRequest(iid, godet.ErrorReason(reason), "", "", "", "", nil)
 		})
 	}
 

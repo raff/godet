@@ -110,11 +110,11 @@ func main() {
 	block := flag.String("block", "", "block specified URLs or pattenrs. Use '|' as separator")
 	intercept := flag.String("intercept", "", "enable request interception and respond according to request type - use type:response,type:response,...\n\t  type:[Document,Stylesheet,Image,Media,Font,Script,TextTrack,XHR,Fetch,EventSource,WebSocket,Manifest,Other]\n\t  response:[Failed,Aborted,TimedOut,AccessDenied,ConnectionClosed,ConnectionReset,ConnectionRefused,ConnectionAborted,ConnectionFailed,NameNotResolved,InternetDisconnected,AddressUnreachable]")
 	html := flag.Bool("html", false, "get outer HTML for current page")
-	setHtml := flag.String("set-html", "", "set outer HTML for current page")
+	setHTML := flag.String("set-html", "", "set outer HTML for current page")
 	wait := flag.Bool("wait", false, "wait for more events")
 	box := flag.Bool("box", false, "get box model for document")
 	styles := flag.Bool("styles", false, "get computed style for document")
-	pause := flag.Duration("pause", 5*time.Second, "wait this amount of time before proceding")
+	pause := flag.Duration("pause", 5*time.Second, "wait this amount of time before proceeding")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -150,7 +150,7 @@ func main() {
 	defer remote.Close()
 
 	done := make(chan bool)
-	should_wait := *wait
+	shouldWait := *wait
 
 	var pwait chan bool
 
@@ -172,7 +172,7 @@ func main() {
 		}
 
 		pretty.PrettyPrint(p)
-		should_wait = false
+		shouldWait = false
 	}
 
 	if *listtabs {
@@ -182,7 +182,7 @@ func main() {
 		}
 
 		pretty.PrettyPrint(tabs)
-		should_wait = false
+		shouldWait = false
 	}
 
 	if *domains {
@@ -192,7 +192,7 @@ func main() {
 		}
 
 		pretty.PrettyPrint(d)
-		should_wait = false
+		shouldWait = false
 	}
 
 	if *history {
@@ -203,7 +203,7 @@ func main() {
 
 		fmt.Println("current entry:", curr)
 		pretty.PrettyPrint(entries)
-		should_wait = false
+		shouldWait = false
 	}
 
 	remote.CallbackEvent(godet.EventClosed, func(params godet.Params) {
@@ -427,7 +427,7 @@ func main() {
 			pretty.PrettyPrint(res)
 		}
 
-		should_wait = false
+		shouldWait = false
 	}
 
 	if *eval != "" {
@@ -437,10 +437,10 @@ func main() {
 		}
 
 		pretty.PrettyPrint(res)
-		should_wait = false
+		shouldWait = false
 	}
 
-	if *setHtml != "" {
+	if *setHTML != "" {
 		id := documentNode(remote, *verbose)
 
 		res, err := remote.QuerySelector(id, "html")
@@ -450,12 +450,12 @@ func main() {
 
 		id = int(res["nodeId"].(float64))
 
-		err = remote.SetOuterHTML(id, *setHtml)
+		err = remote.SetOuterHTML(id, *setHTML)
 		if err != nil {
 			log.Fatal("error in setOuterHTML: ", err)
 		}
 
-		should_wait = false
+		shouldWait = false
 	}
 
 	if *html {
@@ -467,7 +467,7 @@ func main() {
 		}
 
 		log.Println(res)
-		should_wait = false
+		shouldWait = false
 	}
 
 	if *box {
@@ -486,7 +486,7 @@ func main() {
 		}
 
 		pretty.PrettyPrint(res)
-		should_wait = false
+		shouldWait = false
 	}
 
 	if *styles {
@@ -505,7 +505,7 @@ func main() {
 		}
 
 		pretty.PrettyPrint(res)
-		should_wait = false
+		shouldWait = false
 	}
 
 	if *screenshot {
@@ -537,15 +537,15 @@ func main() {
 		}
 
 		remote.SaveScreenshot("screenshot.png", 0644, 0, true)
-		should_wait = false
+		shouldWait = false
 	}
 
 	if *pdf {
 		remote.SavePDF("page.pdf", 0644)
-		should_wait = false
+		shouldWait = false
 	}
 
-	if *wait || should_wait {
+	if *wait || shouldWait {
 		log.Println("Wait for events...")
 		<-done
 	}

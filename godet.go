@@ -44,12 +44,12 @@ const (
 	ErrorReasonInternetDisconnected = ErrorReason("InternetDisconnected")
 	ErrorReasonAddressUnreachable   = ErrorReason("AddressUnreachable")
 
+	// VirtualTimePolicyAdvance specifies that if the scheduler runs out of immediate work, the virtual time base may fast forward to allow the next delayed task (if any) to run
 	VirtualTimePolicyAdvance = VirtualTimePolicy("advance")
-	// VirtualTimePolicyAdvance: If the scheduler runs out of immediate work, the virtual time base may fast forward to allow the next delayed task (if any) to run
+	// VirtualTimePolicyPause specifies that the virtual time base may not advance
 	VirtualTimePolicyPause = VirtualTimePolicy("pause")
-	// VirtualTimePolicyPause: The virtual time base may not advance
+	// VirtualTimePolicyPauseIfNetworkFetchesPending specifies that the virtual time base may not advance if there are any pending resource fetches.
 	VirtualTimePolicyPauseIfNetworkFetchesPending = VirtualTimePolicy("pauseIfNetworkFetchesPending")
-	// VirtualTimePolicyPauseIfNetworkFetchesPending: The virtual time base may not advance if there are any pending resource fetches.
 )
 
 var (
@@ -64,12 +64,13 @@ var (
 	MaxWriteBufferSize = 100 * 1024 // this should be large enough to send large scripts
 )
 
-// NavigationResponse define the type for ProcessNavigation `response`
+// NavigationResponse defines the type for ProcessNavigation `response`
 type NavigationResponse string
 
+// ErrorReason defines what error should be generated to abort a request in ContinueInterceptedRequest
 type ErrorReason string
 
-// VirtualTimePolicy define the type for Emulation.SetVirtualTimePolicy
+// VirtualTimePolicy defines the type for Emulation.SetVirtualTimePolicy
 type VirtualTimePolicy string
 
 func decode(resp *httpclient.HttpResponse, v interface{}) error {
@@ -125,7 +126,7 @@ type Tab struct {
 // NavigationEntry represent a navigation history entry.
 type NavigationEntry struct {
 	ID    int64  `json:"id"`
-	Url   string `json:"url"`
+	URL   string `json:"url"`
 	Title string `json:"title"`
 }
 
@@ -720,32 +721,38 @@ func (remote *RemoteDebugger) SaveScreenshot(filename string, perm os.FileMode, 
 	return ioutil.WriteFile(filename, rawScreenshot, perm)
 }
 
+// PrintToPDFOption defines the functional option for PrintToPDF
 type PrintToPDFOption func(map[string]interface{})
 
+// LandscapeMode instructs PrintToPDF to print pages in landscape mode
 func LandscapeMode() PrintToPDFOption {
 	return func(o map[string]interface{}) {
 		o["landscape"] = true
 	}
 }
 
+// PortraitMode instructs PrintToPDF to print pages in portrait mode
 func PortraitMode() PrintToPDFOption {
 	return func(o map[string]interface{}) {
 		o["landscape"] = false
 	}
 }
 
+// DisplayHeaderFooter instructs PrintToPDF to print headers/footers or not
 func DisplayHeaderFooter() PrintToPDFOption {
 	return func(o map[string]interface{}) {
 		o["displayHeaderFooter"] = true
 	}
 }
 
+// Scale instructs PrintToPDF to scale the pages (1.0 is current scale)
 func Scale(n float64) PrintToPDFOption {
 	return func(o map[string]interface{}) {
 		o["scale"] = n
 	}
 }
 
+// Dimensions sets the current page dimensions for PrintToPDF
 func Dimensions(width, height float64) PrintToPDFOption {
 	return func(o map[string]interface{}) {
 		o["paperWidth"] = width
@@ -753,6 +760,7 @@ func Dimensions(width, height float64) PrintToPDFOption {
 	}
 }
 
+// Margins sets the margin sizes for PrintToPDF
 func Margins(top, bottom, left, right float64) PrintToPDFOption {
 	return func(o map[string]interface{}) {
 		o["marginTop"] = top
@@ -762,6 +770,7 @@ func Margins(top, bottom, left, right float64) PrintToPDFOption {
 	}
 }
 
+// PageRanges instructs PrintToPDF to print only the specified range of pages
 func PageRanges(ranges string) PrintToPDFOption {
 	return func(o map[string]interface{}) {
 		o["pageRanges"] = ranges
@@ -846,7 +855,7 @@ func (remote *RemoteDebugger) EnableRequestInterception(enabled bool) error {
 //  method string - if set this allows the request method to be overridden.
 //  postData string - if set this allows postData to be set.
 //  headers Headers - if set this allows the request headers to be changed.
-func (remote *RemoteDebugger) ContinueInterceptedRequest(interceptionId string,
+func (remote *RemoteDebugger) ContinueInterceptedRequest(interceptionID string,
 	errorReason ErrorReason,
 	rawResponse string,
 	url string,
@@ -854,7 +863,7 @@ func (remote *RemoteDebugger) ContinueInterceptedRequest(interceptionId string,
 	postData string,
 	headers map[string]string) error {
 	params := Params{
-		"interceptionId": interceptionId,
+		"interceptionId": interceptionID,
 	}
 
 	if errorReason != "" {

@@ -1005,6 +1005,19 @@ func (remote *RemoteDebugger) SetVisibleSize(width, height int) error {
 	return err
 }
 
+// SetDeviceMetricsOverride sets mobile and fitWindow on top of device dimensions
+// Can be used to produce screenshots of mobile viewports.
+func (remote *RemoteDebugger) SetDeviceMetricsOverride(width int, height int, deviceScaleFactor float64, mobile bool, fitWindow bool) error {
+	_, err := remote.SendRequest("Emulation.setDeviceMetricsOverride", Params{
+		"width":  int(width),
+		"height": int(height),
+		"deviceScaleFactor": float64(deviceScaleFactor),
+		"mobile": bool(mobile),
+		"fitWindow": bool(fitWindow)})
+
+	return err
+}
+
 // SetVirtualTimePolicy turns on virtual time for all frames (replacing real-time with a synthetic time source) and sets the current virtual time policy. Note this supersedes any previous time budget.
 func (remote *RemoteDebugger) SetVirtualTimePolicy(policy VirtualTimePolicy, budget int) error {
 	params := Params{"policy": policy}

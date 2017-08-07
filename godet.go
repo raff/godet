@@ -415,7 +415,10 @@ loop:
 		default:
 			_, bytes, err := remote.socket().ReadMessage()
 			if err != nil {
-				log.Println("read message:", err)
+				if remote.verbose {
+					log.Println("read message:", err)
+				}
+
 				if permanentError(err) {
 					break loop
 				}

@@ -52,6 +52,14 @@ const (
 	VirtualTimePolicyPauseIfNetworkFetchesPending = VirtualTimePolicy("pauseIfNetworkFetchesPending")
 )
 
+type IdType int
+
+const (
+	NodeId IdType = iota
+	BackendNodeId
+	ObjectId
+)
+
 var (
 	// ErrorNoActiveTab is returned if there are no active tabs (of type "page")
 	ErrorNoActiveTab = errors.New("no active tab")
@@ -936,12 +944,25 @@ func (remote *RemoteDebugger) Focus(nodeID int) error {
 }
 
 // SetInputFiles attaches input files to a specified node (an input[type=file] element?).
+// Note: this has been renamed SetFileInputFiles
 func (remote *RemoteDebugger) SetInputFiles(nodeID int, files []string) error {
-	_, err := remote.SendRequest("DOM.setInputFiles", Params{
-		"nodeId": nodeID,
-		"files":  files,
-	})
+	return remote.SetFileInputFiles(nodeID, files, NodeId)
+}
 
+// SetFileInputFiles sets files for the given file input element.
+func (remote *RemoteDebugger) SetFileInputFiles(id int, files []string, idType IdType) error {
+	params := Params{"files": files}
+
+	switch idType {
+	case NodeId:
+		params["nodeId"] = id
+	case BackendNodeId:
+		params["backendNodeId"] = id
+	case ObjectId:
+		params["objectId"] = id
+	}
+
+	_, err := remote.SendRequest("DOM.setFileInputFiles", params)
 	return err
 }
 

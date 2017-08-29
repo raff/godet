@@ -354,9 +354,11 @@ func (remote *RemoteDebugger) SendRequest(method string, params Params) (map[str
 
 // sendRawReplyRequest sends a request and returns the reply bytes.
 func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) ([]byte, error) {
+	responseChann := make(chan json.RawMessage, 1)
+
 	remote.Lock()
 	reqID := remote.reqID
-	remote.responses[reqID] = make(chan json.RawMessage, 1)
+	remote.responses[reqID] = responseChann
 	remote.reqID++
 	remote.Unlock()
 
@@ -367,7 +369,7 @@ func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) 
 	}
 
 	remote.requests <- command
-	reply := <-remote.responses[reqID]
+	reply := <-responseChann
 
 	remote.Lock()
 	delete(remote.responses, reqID)

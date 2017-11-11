@@ -1155,6 +1155,38 @@ func (remote *RemoteDebugger) SetProfilerSamplingInterval(n int64) error {
 	return err
 }
 
+// StartPreciseCoverage enable precise code coverage.
+func (remote *RemoteDebugger) StartPreciseCoverage(callCount, detailed bool) error {
+	_, err := remote.SendRequest("Profiler.startPreciseCoverage", Params{
+		"callCount": callCount,
+		"detailed":  detailed,
+	})
+	return err
+}
+
+// StopPreciseCoverage disable precise code coverage.
+func (remote *RemoteDebugger) StopPreciseCoverage() error {
+	_, err := remote.SendRequest("Profiler.stopPreciseCoverage", nil)
+	return err
+}
+
+// GetPreciseCoverage collects coverage data for the current isolate and resets execution counters.
+func (remote *RemoteDebugger) GetPreciseCoverage(precise bool) ([]interface{}, error) {
+	var res map[string]interface{}
+	var err error
+
+	if precise {
+		res, err = remote.SendRequest("Profiler.takePreciseCoverage", nil)
+	} else {
+		res, err = remote.SendRequest("Profiler.getBestEffortCoverage", nil)
+	}
+	if res == nil || err != nil {
+		return nil, err
+	}
+	log.Println(res)
+	return res["result"].([]interface{}), nil
+}
+
 // DomainEvents enables event listening in the specified domain.
 func (remote *RemoteDebugger) DomainEvents(domain string, enable bool) error {
 	method := domain

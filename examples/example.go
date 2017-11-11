@@ -62,6 +62,8 @@ func main() {
 	// navigate in existing tab
 	_ = remote.ActivateTab(tabs[0])
 
+	//remote.StartPreciseCoverage(true, true)
+
 	// re-enable events when changing active tab
 	remote.AllEvents(true) // enable all events
 
@@ -81,4 +83,19 @@ func main() {
 
 	// or save page as PDF
 	_ = remote.SavePDF("page.pdf", 0644, godet.PortraitMode(), godet.Scale(0.5), godet.Dimensions(6.0, 2.0))
+
+	// if err := remote.SetInputFiles(0, []string{"hello.txt"}); err != nil {
+	//     fmt.Println("setInputFiles", err)
+	// }
+
+	time.Sleep(5 * time.Second)
+
+	//remote.StopPreciseCoverage()
+
+	r, err := remote.GetPreciseCoverage(true)
+	if err != nil {
+		fmt.Println("error profiling", err)
+	} else {
+		fmt.Println(r)
+	}
 }

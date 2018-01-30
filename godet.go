@@ -225,7 +225,7 @@ func Connect(port string, verbose bool) (*RemoteDebugger, error) {
 
 	// remote.http.Verbose = verbose
 	if verbose {
-		httpclient.StartLogging(false, true)
+		httpclient.StartLogging(false, true, false)
 	}
 
 	if err := remote.connectWs(nil); err != nil {
@@ -400,10 +400,12 @@ func (remote *RemoteDebugger) sendMessages() {
 
 func permanentError(err error) bool {
 	if websocket.IsUnexpectedCloseError(err) {
+		log.Println("unexpected close error")
 		return true
 	}
 
 	if neterr, ok := err.(net.Error); ok && !neterr.Temporary() {
+		log.Println("permanent network error")
 		return true
 	}
 
@@ -842,6 +844,47 @@ func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
 	}
 }
 
+type Cookie struct {
+	Name     string  `json:"name"`
+	Value    string  `json:"value"`
+	Domain   string  `json:"domain"`
+	Path     string  `json:"path"`
+	Size     int     `json:"size"`
+	Expires  float64 `json:"expires"`
+	HttpOnly bool    `json:"httpOnly"`
+	Secure   bool    `json:"secure"`
+	Session  bool    `json:"session"`
+	SameSite string  `json:"sameSite"`
+}
+
+// GetCookies returns all browser cookies for the current URL. Depending on the backend support, will return\ndetailed cookie information in the `cookies` field.
+func (remote *RemoteDebugger) GetCookies(urls []string) ([]Cookie, error) {
+	params := Params{}
+
+	if urls != nil {
+		params["urls"] = urls
+	}
+
+	rawReply, err := remote.sendRawReplyRequest("Network.getCookies", params)
+	if err != nil {
+		return nil, err
+	}
+
+	var cookies struct {
+		Cookies []Cookie `json:"cookies"`
+	}
+
+	err = json.Unmarshal(rawReply, &cookies)
+	if err != nil {
+		log.Println("unmarshal:", err)
+		log.Println(string(rawReply))
+
+		return nil, err
+	}
+
+	return cookies.Cookies, nil
+}
+
 // EnableRequestInterception enables interception, modification or cancellation of network requests
 func (remote *RemoteDebugger) EnableRequestInterception(enabled bool) error {
 	_, err := remote.SendRequest("Network.enableRequestInterception", Params{
@@ -1185,6 +1228,14 @@ func (remote *RemoteDebugger) GetPreciseCoverage(precise bool) ([]interface{}, e
 	}
 	log.Println(res)
 	return res["result"].([]interface{}), nil
+}
+
+// CloseBrowser gracefully closes the browser we are connected to
+func (remote *RemoteDebugger) CloseBrowser() {
+	_, err := remote.SendRequest("Browser.close", nil)
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 // DomainEvents enables event listening in the specified domain.

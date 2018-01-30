@@ -9,11 +9,11 @@ import "github.com/raff/godet"
 
 func main() {
 	// connect to Chrome instance
-	remote, err := godet.Connect("localhost:9222", true)
-        if err != nil {
-            fmt.Println("cannot connect to Chrome instance:", err)
-            return
-        }
+	remote, err := godet.Connect("localhost:9222", false)
+	if err != nil {
+		fmt.Println("cannot connect to Chrome instance:", err)
+		return
+	}
 
 	// disconnect when done
 	defer remote.Close()

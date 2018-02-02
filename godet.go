@@ -1113,23 +1113,13 @@ func (remote *RemoteDebugger) SendRune(c rune) error {
 	return err
 }
 
-// MouseMove moves the mouse/cursor to the specified coordinates (relative to the main frame's viewport in CSS pixels.)
-func (remote *RemoteDebugger) MouseMove(x, y int) error {
-	_, err := remote.SendRequest("Input.dispatchMouseEvent", Params{
-		"type": "mouseMoved",
-		"x":    x,
-		"y":    y,
-	})
-	return err
-}
-
-type MouseButton string
+type MouseEvent string
 type KeyModifier int
 
 const (
-	LeftButton   MouseButton = "left"
-	MiddleButton MouseButton = "middle"
-	RightButton  MouseButton = "right"
+	MouseMove    MouseEvent = "mouseMoved"
+	MousePress   MouseEvent = "mousePressed"
+	MouseRelease MouseEvent = "mouseReleased"
 
 	NoModifier KeyModifier = 0
 	AltKey     KeyModifier = 1
@@ -1139,22 +1129,55 @@ const (
 	ShiftKey   KeyModifier = 8
 )
 
-// MousePress simulate pressing a mouse button "count" times with the specified keyboard modifiers
-func (remote *RemoteDebugger) MousePress(button MouseButton, modifiers KeyModifier, count int) error {
-	if _, err := remote.SendRequest("Input.dispatchMouseEvent", Params{
-		"type":       "mousePressed",
-		"button":     string(button),
-		"clickCount": count,
-		"modifiers":  int(modifiers),
-	}); err != nil {
-		return err
+type MouseOption func(p Params)
+
+func LeftButton() MouseOption {
+	return func(p Params) {
+		p["button"] = "left"
 	}
-	_, err := remote.SendRequest("Input.dispatchMouseEvent", Params{
-		"type":       "mouseReleased",
-		"button":     string(button),
-		"clickCount": count,
-		"modifiers":  int(modifiers),
-	})
+}
+
+func RightButton() MouseOption {
+	return func(p Params) {
+		p["button"] = "right"
+	}
+}
+
+func MiddleButton() MouseOption {
+	return func(p Params) {
+		p["button"] = "middle"
+	}
+}
+
+func Modifiers(m KeyModifier) MouseOption {
+	return func(p Params) {
+		p["modifiers"] = m
+	}
+}
+
+func Clicks(c int) MouseOption {
+	return func(p Params) {
+		p["clickCount"] = c
+	}
+}
+
+// MouseEvent dispatches a mouse event to the page. An event can be MouseMove, MousePressed and MouseReleased.
+// An event always requires mouse coordinates, while other parameters are optional.
+//
+// To simulate mouse button presses, pass LeftButton()/RightButton()/MiddleButton() options and possibily key modifiers.
+// It is also possible to pass the number of clicks (2 for double clicks, etc.).
+func (remote *RemoteDebugger) MouseEvent(ev MouseEvent, x, y int, options ...MouseOption) error {
+	params := Params{
+		"type": ev,
+		"x":    x,
+		"y":    y,
+	}
+
+	for _, o := range options {
+		o(params)
+	}
+
+	_, err := remote.SendRequest("Input.dispatchMouseEvent", params)
 	return err
 }
 
@@ -1346,4 +1369,44 @@ func (remote *RemoteDebugger) ProfilerEvents(enable bool) error {
 // EmulationEvents enables Emulation events listening.
 func (remote *RemoteDebugger) EmulationEvents(enable bool) error {
 	return remote.DomainEvents("Emulation", enable)
+}
+
+// ConsoleAPICallback processes the Runtime.consolAPICalled event and returns printable info
+func ConsoleAPICallback(cb func([]interface{})) EventCallback {
+	return func(params Params) {
+		l := []interface{}{"console." + params["type"].(string)}
+
+		for _, a := range params["args"].([]interface{}) {
+			arg := a.(map[string]interface{})
+
+			if arg["value"] != nil {
+				l = append(l, arg["value"])
+			} else if arg["preview"] != nil {
+				arg := arg["preview"].(map[string]interface{})
+
+				v := arg["description"].(string) + "{"
+
+				for i, p := range arg["properties"].([]interface{}) {
+					if i > 0 {
+						v += ", "
+					}
+
+					prop := p.(map[string]interface{})
+					if prop["name"] != nil {
+						v += fmt.Sprintf("%q: ", prop["name"])
+					}
+
+					v += fmt.Sprintf("%v", prop["value"])
+				}
+
+				v += "}"
+				l = append(l, v)
+			} else {
+				l = append(l, arg["type"].(string))
+			}
+
+		}
+
+		cb(l)
+	}
 }

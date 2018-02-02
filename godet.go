@@ -1113,6 +1113,51 @@ func (remote *RemoteDebugger) SendRune(c rune) error {
 	return err
 }
 
+// MouseMove moves the mouse/cursor to the specified coordinates (relative to the main frame's viewport in CSS pixels.)
+func (remote *RemoteDebugger) MouseMove(x, y int) error {
+	_, err := remote.SendRequest("Input.dispatchMouseEvent", Params{
+		"type": "mouseMoved",
+		"x":    x,
+		"y":    y,
+	})
+	return err
+}
+
+type MouseButton string
+type KeyModifier int
+
+const (
+	LeftButton   MouseButton = "left"
+	MiddleButton MouseButton = "middle"
+	RightButton  MouseButton = "right"
+
+	NoModifier KeyModifier = 0
+	AltKey     KeyModifier = 1
+	CtrlKey    KeyModifier = 2
+	MetaKey    KeyModifier = 4
+	CommandKey KeyModifier = 4
+	ShiftKey   KeyModifier = 8
+)
+
+// MousePress simulate pressing a mouse button "count" times with the specified keyboard modifiers
+func (remote *RemoteDebugger) MousePress(button MouseButton, modifiers KeyModifier, count int) error {
+	if _, err := remote.SendRequest("Input.dispatchMouseEvent", Params{
+		"type":       "mousePressed",
+		"button":     string(button),
+		"clickCount": count,
+		"modifiers":  int(modifiers),
+	}); err != nil {
+		return err
+	}
+	_, err := remote.SendRequest("Input.dispatchMouseEvent", Params{
+		"type":       "mouseReleased",
+		"button":     string(button),
+		"clickCount": count,
+		"modifiers":  int(modifiers),
+	})
+	return err
+}
+
 // Evaluate evalutes a Javascript function in the context of the current page.
 func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
 	res, err := remote.SendRequest("Runtime.evaluate", Params{

@@ -887,11 +887,21 @@ func (remote *RemoteDebugger) GetCookies(urls []string) ([]Cookie, error) {
 
 // EnableRequestInterception enables interception, modification or cancellation of network requests
 func (remote *RemoteDebugger) EnableRequestInterception(enabled bool) error {
-	_, err := remote.SendRequest("Network.enableRequestInterception", Params{
-		"enabled": enabled,
-	})
-
-	return err
+	if enabled {
+		_, err := remote.SendRequest("Network.setRequestInterception", Params{
+			"patterns": []map[string]string{
+				map[string]string{
+					"urlPattern": "*",
+				},
+			},
+		})
+		return err
+	} else {
+		_, err := remote.SendRequest("Network.setRequestInterception", Params{
+			"patterns": []map[string]string{},
+		})
+		return err
+	}
 }
 
 // ContinueInterceptedRequest is the response to Network.requestIntercepted

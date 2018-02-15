@@ -382,6 +382,9 @@ func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) 
 
 func (remote *RemoteDebugger) sendMessages() {
 	for message := range remote.requests {
+		if remote.isClosing {
+			break
+		}
 		bytes, err := json.Marshal(message)
 		if err != nil {
 			log.Println("marshal", message, err)

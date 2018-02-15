@@ -185,7 +185,8 @@ type RemoteDebugger struct {
 	verbose bool
 
 	sync.Mutex
-	closed chan bool
+	isClosing bool
+	closed    chan bool
 
 	requests  chan Params
 	responses map[int]chan json.RawMessage
@@ -319,6 +320,7 @@ func (remote *RemoteDebugger) socket() (ws *websocket.Conn) {
 // Close the RemoteDebugger connection.
 func (remote *RemoteDebugger) Close() (err error) {
 	remote.Lock()
+	remote.isClosing = true
 	ws := remote.ws
 	remote.ws = nil
 	remote.Unlock()
@@ -425,6 +427,9 @@ loop:
 		default:
 			_, bytes, err := remote.socket().ReadMessage()
 			if err != nil {
+				if remote.isClosing {
+					break loop
+				}
 				log.Println("read message:", err)
 				if permanentError(err) {
 					break loop

@@ -885,22 +885,52 @@ func (remote *RemoteDebugger) GetCookies(urls []string) ([]Cookie, error) {
 	return cookies.Cookies, nil
 }
 
+type ResourceType string
+
+const (
+	ResourceTypeDocument    = ResourceType("Document")
+	ResourceTypeStylesheet  = ResourceType("Stylesheet")
+	ResourceTypeImage       = ResourceType("Image")
+	ResourceTypeMedia       = ResourceType("Media")
+	ResourceTypeFont        = ResourceType("Font")
+	ResourceTypeScript      = ResourceType("Script")
+	ResourceTypeTextTrack   = ResourceType("TextTrack")
+	ResourceTypeXHR         = ResourceType("XHR")
+	ResourceTypeFetch       = ResourceType("Fetch")
+	ResourceTypeEventSource = ResourceType("EventSource")
+	ResourceTypeWebSocket   = ResourceType("WebSocket")
+	ResourceTypeManifest    = ResourceType("Manifest")
+	ResourceTypeOther       = ResourceType("Other")
+)
+
+type InterceptionStage string
+
+const (
+	StageRequest         = InterceptionStage("Request")
+	StageHeadersReceived = InterceptionStage("HeadersReceived")
+)
+
+type RequestPattern struct {
+	UrlPattern        string            `json:"urlPattern,omitempty"`
+	ResourceType      ResourceType      `json:"resourceType,omitempty"`
+	InterceptionStage InterceptionStage `json:"interceptionStage,omitempty"`
+}
+
+// SetRequestInterception sets the requests to intercept that match the provided patterns
+// and optionally resource types.
+func (remote *RemoteDebugger) SetRequestInterception(patterns ...RequestPattern) error {
+	_, err := remote.SendRequest("Network.setRequestInterception", Params{
+		"patterns": patterns,
+	})
+	return err
+}
+
 // EnableRequestInterception enables interception, modification or cancellation of network requests
 func (remote *RemoteDebugger) EnableRequestInterception(enabled bool) error {
 	if enabled {
-		_, err := remote.SendRequest("Network.setRequestInterception", Params{
-			"patterns": []map[string]string{
-				map[string]string{
-					"urlPattern": "*",
-				},
-			},
-		})
-		return err
+		return remote.SetRequestInterception(RequestPattern{UrlPattern: "*"})
 	} else {
-		_, err := remote.SendRequest("Network.setRequestInterception", Params{
-			"patterns": []map[string]string{},
-		})
-		return err
+		return remote.SetRequestInterception()
 	}
 }
 

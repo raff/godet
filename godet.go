@@ -391,6 +391,9 @@ func (remote *RemoteDebugger) sendMessages() {
 		}
 
 		ws := remote.socket()
+		if ws == nil { // the socket is now closed
+			break
+		}
 		err = ws.WriteMessage(websocket.TextMessage, bytes)
 		if err != nil {
 			log.Println("write message:", err)
@@ -423,8 +426,17 @@ loop:
 			break loop
 
 		default:
-			_, bytes, err := remote.socket().ReadMessage()
+			ws := remote.socket()
+			if ws == nil { // the socket is now closed
+				break loop
+			}
+
+			_, bytes, err := ws.ReadMessage()
 			if err != nil {
+				if remote.socket() == nil { // the socket is now closed
+					continue // one more check for remote.closed
+				}
+
 				log.Println("read message:", err)
 				if permanentError(err) {
 					break loop

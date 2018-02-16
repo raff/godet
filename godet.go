@@ -305,7 +305,7 @@ func (remote *RemoteDebugger) connectWs(tab *Tab) error {
 	remote.current = tab.ID
 	remote.Unlock()
 
-	go remote.readMessages()
+	go remote.readMessages(ws)
 	return nil
 }
 
@@ -415,7 +415,7 @@ func permanentError(err error) bool {
 	return false
 }
 
-func (remote *RemoteDebugger) readMessages() {
+func (remote *RemoteDebugger) readMessages(ws *websocket.Conn) {
 	remoteClosed := false
 
 loop:
@@ -426,14 +426,13 @@ loop:
 			break loop
 
 		default:
-			ws := remote.socket()
-			if ws == nil { // the socket is now closed
+			if remote.socket() != ws { // this socket is now closed
 				break loop
 			}
 
 			_, bytes, err := ws.ReadMessage()
 			if err != nil {
-				if remote.socket() == nil { // the socket is now closed
+				if remote.socket() != ws { // this socket is now closed
 					continue // one more check for remote.closed
 				}
 

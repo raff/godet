@@ -117,6 +117,7 @@ func main() {
 	pause := flag.Duration("pause", 5*time.Second, "wait this amount of time before proceeding")
 	close := flag.Bool("close", false, "gracefully close browser")
 	getCookies := flag.Bool("cookies", false, "get cookies for current page")
+	getAllCookies := flag.Bool("all-cookies", false, "get all cookies for current page")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -544,6 +545,16 @@ func main() {
 
 	if *getCookies {
 		cookies, err := remote.GetCookies(nil)
+		if err != nil {
+			log.Println("error getting cookies:", err)
+		} else {
+			pretty.PrettyPrint(cookies)
+		}
+		shouldWait = false
+	}
+
+	if *getAllCookies {
+		cookies, err := remote.GetAllCookies()
 		if err != nil {
 			log.Println("error getting cookies:", err)
 		} else {

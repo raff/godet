@@ -868,7 +868,8 @@ type Cookie struct {
 	SameSite string  `json:"sameSite"`
 }
 
-// GetCookies returns all browser cookies for the current URL. Depending on the backend support, will return\ndetailed cookie information in the `cookies` field.
+// GetCookies returns all browser cookies for the current URL.
+// Depending on the backend support, will return detailed cookie information in the `cookies` field.
 func (remote *RemoteDebugger) GetCookies(urls []string) ([]Cookie, error) {
 	params := Params{}
 
@@ -877,6 +878,29 @@ func (remote *RemoteDebugger) GetCookies(urls []string) ([]Cookie, error) {
 	}
 
 	rawReply, err := remote.sendRawReplyRequest("Network.getCookies", params)
+	if err != nil {
+		return nil, err
+	}
+
+	var cookies struct {
+		Cookies []Cookie `json:"cookies"`
+	}
+
+	err = json.Unmarshal(rawReply, &cookies)
+	if err != nil {
+		log.Println("unmarshal:", err)
+		log.Println(string(rawReply))
+
+		return nil, err
+	}
+
+	return cookies.Cookies, nil
+}
+
+// GetAllCookies returns all browser cookies. Depending on the backend support,
+// will return detailed cookie information in the `cookies` field.
+func (remote *RemoteDebugger) GetAllCookies() ([]Cookie, error) {
+	rawReply, err := remote.sendRawReplyRequest("Network.getCookies", nil)
 	if err != nil {
 		return nil, err
 	}

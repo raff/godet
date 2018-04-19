@@ -768,6 +768,13 @@ func DisplayHeaderFooter() PrintToPDFOption {
 	}
 }
 
+// printBackground instructs PrintToPDF to print background graphics
+func PrintBackground() PrintToPDFOption {
+	return func(o map[string]interface{}) {
+		o["printBackground"] = true
+	}
+}
+
 // Scale instructs PrintToPDF to scale the pages (1.0 is current scale)
 func Scale(n float64) PrintToPDFOption {
 	return func(o map[string]interface{}) {

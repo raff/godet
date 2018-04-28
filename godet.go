@@ -176,6 +176,12 @@ func (err EvaluateError) Error() string {
 	return desc
 }
 
+type NavigationError string
+
+func (err NavigationError) Error() string {
+    return "NavigationError:" + string(err)
+}
+
 // RemoteDebugger implements an interface for Chrome DevTools.
 type RemoteDebugger struct {
 	http    *httpclient.HttpClient
@@ -647,6 +653,10 @@ func (remote *RemoteDebugger) Navigate(url string) (string, error) {
 		return "", err
 	}
 
+        if errorText, ok := res["errorText"]; ok {
+                return "", NavigationError(errorText.(string))
+        }
+
 	frameID, ok := res["frameId"]
 	if !ok {
 		return "", nil
@@ -765,6 +775,13 @@ func PortraitMode() PrintToPDFOption {
 func DisplayHeaderFooter() PrintToPDFOption {
 	return func(o map[string]interface{}) {
 		o["displayHeaderFooter"] = true
+	}
+}
+
+// printBackground instructs PrintToPDF to print background graphics
+func PrintBackground() PrintToPDFOption {
+	return func(o map[string]interface{}) {
+		o["printBackground"] = true
 	}
 }
 

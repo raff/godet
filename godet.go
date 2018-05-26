@@ -67,6 +67,8 @@ var (
 	ErrorNoWsURL = errors.New("no websocket URL")
 	// ErrorNoResponse is returned if a method was expecting a response but got nil instead
 	ErrorNoResponse = errors.New("no response")
+	// ErrorClose is returned if a method is called after the connection has been close
+	ErrorClose = errors.New("closed")
 
 	MaxReadBufferSize  = 0          // default gorilla/websocket buffer size
 	MaxWriteBufferSize = 100 * 1024 // this should be large enough to send large scripts
@@ -179,7 +181,7 @@ func (err EvaluateError) Error() string {
 type NavigationError string
 
 func (err NavigationError) Error() string {
-    return "NavigationError:" + string(err)
+	return "NavigationError:" + string(err)
 }
 
 // RemoteDebugger implements an interface for Chrome DevTools.
@@ -330,6 +332,7 @@ func (remote *RemoteDebugger) Close() (err error) {
 	remote.Unlock()
 
 	if ws != nil { // already closed
+		close(remote.requests)
 		close(remote.closed)
 		err = ws.Close()
 	}
@@ -360,11 +363,15 @@ func (remote *RemoteDebugger) SendRequest(method string, params Params) (map[str
 
 // sendRawReplyRequest sends a request and returns the reply bytes.
 func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) ([]byte, error) {
-	responseChann := make(chan json.RawMessage, 1)
-
 	remote.Lock()
+	if remote.ws == nil {
+		remote.Unlock()
+		return nil, ErrorClose
+	}
+
+	responseChan := make(chan json.RawMessage, 1)
 	reqID := remote.reqID
-	remote.responses[reqID] = responseChann
+	remote.responses[reqID] = responseChan
 	remote.reqID++
 	remote.Unlock()
 
@@ -375,7 +382,7 @@ func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) 
 	}
 
 	remote.requests <- command
-	reply := <-responseChann
+	reply := <-responseChan
 
 	remote.Lock()
 	delete(remote.responses, reqID)
@@ -653,9 +660,9 @@ func (remote *RemoteDebugger) Navigate(url string) (string, error) {
 		return "", err
 	}
 
-        if errorText, ok := res["errorText"]; ok {
-                return "", NavigationError(errorText.(string))
-        }
+	if errorText, ok := res["errorText"]; ok {
+		return "", NavigationError(errorText.(string))
+	}
 
 	frameID, ok := res["frameId"]
 	if !ok {

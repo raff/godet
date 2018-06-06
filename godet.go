@@ -1328,6 +1328,37 @@ func (remote *RemoteDebugger) SetUserAgent(userAgent string) error {
 	return err
 }
 
+func (remote *RemoteDebugger) GetCertificate(origin string) ([]string, error) {
+	resp, err := remote.SendRequest("Network.getCertificate", Params{
+		"origin": origin,
+	})
+
+	tableNames := resp["tableNames"].([]interface{})
+	certs := make([]string, len(tableNames))
+
+	for _, item := range tableNames {
+		certs = append(certs, item.(string))
+	}
+	return certs, err
+}
+
+func (remote *RemoteDebugger) ClearBrowserCache() error {
+	_, err := remote.SendRequest("Network.clearBrowserCache", nil)
+	return err
+}
+
+func (remote *RemoteDebugger) ClearBrowserCookies() error {
+	_, err := remote.SendRequest("Network.clearBrowserCookies", nil)
+	return err
+}
+
+func (remote *RemoteDebugger) SetCacheDisabled(disabled bool) error {
+	_, err := remote.SendRequest("Network.setCacheDisabled", Params{
+		"cacheDisabled": disabled,
+	})
+	return err
+}
+
 // CallbackEvent sets a callback for the specified event.
 func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Lock()

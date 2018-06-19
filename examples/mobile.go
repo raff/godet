@@ -51,8 +51,8 @@ func main() {
 	// create new tab
 	tab, _ := remote.NewTab("https://gegenwind.dk") // google.com is wonky
 
-  remote.SetVisibleSize(375,667) // iPhone 7
-  remote.SetDeviceMetricsOverride(375,667,3,true,false) // iPhone 7
+	remote.SetVisibleSize(375, 667)                           // iPhone 7
+	remote.SetDeviceMetricsOverride(375, 667, 3, true, false) // iPhone 7
 
 	time.Sleep(time.Second * 3)
 	// take a screenshot

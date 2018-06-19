@@ -5,11 +5,11 @@ package main
 import "fmt"
 import "time"
 
-import "github.com/JonathanMH/godet"
+import "github.com/raff/godet"
 
 func main() {
 	// connect to Chrome instance
-	remote, _ := godet.Connect("localhost:9222", true)
+	remote, _ := godet.Connect("localhost:9222", false)
 
 	// disconnect when done
 	defer remote.Close()
@@ -48,13 +48,14 @@ func main() {
 	remote.DOMEvents(true)
 	remote.LogEvents(true)
 
-	// create new tab
-	tab, _ := remote.NewTab("https://gegenwind.dk") // google.com is wonky
+	// Navigate to mobile site
+	remote.Navigate("https://search.google.com/test/mobile-friendly")
 
 	remote.SetVisibleSize(375, 667)                           // iPhone 7
 	remote.SetDeviceMetricsOverride(375, 667, 3, true, false) // iPhone 7
 
 	time.Sleep(time.Second * 3)
+
 	// take a screenshot
-	_ = remote.SaveScreenshot("mobile.png", 0644, 0, true)
+	remote.SaveScreenshot("mobile.png", 0644, 0, true)
 }

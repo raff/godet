@@ -1174,11 +1174,11 @@ func (remote *RemoteDebugger) SetVisibleSize(width, height int) error {
 // Can be used to produce screenshots of mobile viewports.
 func (remote *RemoteDebugger) SetDeviceMetricsOverride(width int, height int, deviceScaleFactor float64, mobile bool, fitWindow bool) error {
 	_, err := remote.SendRequest("Emulation.setDeviceMetricsOverride", Params{
-		"width":             int(width),
-		"height":            int(height),
-		"deviceScaleFactor": float64(deviceScaleFactor),
-		"mobile":            bool(mobile),
-		"fitWindow":         bool(fitWindow)})
+		"width":             width,
+		"height":            height,
+		"deviceScaleFactor": deviceScaleFactor,
+		"mobile":            mobile,
+		"fitWindow":         fitWindow})
 
 	return err
 }

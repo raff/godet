@@ -50,6 +50,10 @@ const (
 	VirtualTimePolicyPause = VirtualTimePolicy("pause")
 	// VirtualTimePolicyPauseIfNetworkFetchesPending specifies that the virtual time base may not advance if there are any pending resource fetches.
 	VirtualTimePolicyPauseIfNetworkFetchesPending = VirtualTimePolicy("pauseIfNetworkFetchesPending")
+
+	AllowDownload   = DownloadBehavior("allow")
+	DenyDownload    = DownloadBehavior("deny")
+	DefaultDownload = DownloadBehavior("default")
 )
 
 type IdType int
@@ -82,6 +86,9 @@ type ErrorReason string
 
 // VirtualTimePolicy defines the type for Emulation.SetVirtualTimePolicy
 type VirtualTimePolicy string
+
+// DownloadBehaviour defines the type for Page.SetDownloadBehavior
+type DownloadBehavior string
 
 func decode(resp *httpclient.HttpResponse, v interface{}) error {
 	err := json.NewDecoder(resp.Body).Decode(v)
@@ -861,6 +868,17 @@ func (remote *RemoteDebugger) HandleJavaScriptDialog(accept bool, promptText str
 		"promptText": promptText,
 	})
 
+	return err
+}
+
+// SetDownloadBehaviour enable/disable downloads.
+func (remote *RemoteDebugger) SetDownloadBehavior(behavior DownloadBehavior, downloadPath string) error {
+	params := Params{"behavior": behavior}
+	if len(downloadPath) > 0 {
+		params["downloadPath"] = downloadPath
+	}
+
+	_, err := remote.SendRequest("Page.setDownloadBehavior", params)
 	return err
 }
 

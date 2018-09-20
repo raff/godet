@@ -102,4 +102,14 @@ func main() {
 	} else {
 		fmt.Println(r)
 	}
+
+	// Allow downloads
+	_ = remote.SetDownloadBehavior(godet.AllowDownload, "/tmp/")
+	_, _ = remote.Navigate("http://httpbin.org/response-headers?Content-Type=text/plain;%20charset=UTF-8&Content-Disposition=attachment;%20filename%3d%22test.jnlp%22")
+
+	time.Sleep(time.Second)
+
+	// Block downloads
+	_ = remote.SetDownloadBehavior(godet.DenyDownload, "")
+	_, _ = remote.Navigate("http://httpbin.org/response-headers?Content-Type=text/plain;%20charset=UTF-8&Content-Disposition=attachment;%20filename%3d%22test.jnlp%22")
 }

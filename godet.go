@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/gobs/httpclient"
 	"github.com/gorilla/websocket"
@@ -1201,12 +1202,47 @@ func (remote *RemoteDebugger) SetDeviceMetricsOverride(width int, height int, de
 	return err
 }
 
+type setVirtualTimerPolicyOption func(p Params)
+
+// If set, after this many virtual milliseconds have elapsed virtual time will be paused and a\nvirtualTimeBudgetExpired event is sent.
+func Budget(budget int) setVirtualTimerPolicyOption {
+	return func(p Params) {
+		p["budget"] = float64(budget)
+	}
+}
+
+// If set this specifies the maximum number of tasks that can be run before virtual is forced\nforwards to prevent deadlock.
+func MaxVirtualTimeTaskStarvationCount(max int) setVirtualTimerPolicyOption {
+	return func(p Params) {
+		p["maxVirtualTimeTaskStarvationCount"] = float64(max)
+	}
+}
+
+// If set the virtual time policy change should be deferred until any frame starts navigating.\nNote any previous deferred policy change is superseded.
+func WaitForNavigation(wait bool) setVirtualTimerPolicyOption {
+	return func(p Params) {
+		p["waitForNavigation"] = wait
+	}
+}
+
+// If set, base::Time::Now will be overriden to initially return this value.
+func InitialVirtualTime(t time.Time) setVirtualTimerPolicyOption {
+	return func(p Params) {
+		p["initialVirtualTime"] = float64(t.Unix())
+	}
+}
+
 // SetVirtualTimePolicy turns on virtual time for all frames (replacing real-time with a synthetic time source) and sets the current virtual time policy. Note this supersedes any previous time budget.
-func (remote *RemoteDebugger) SetVirtualTimePolicy(policy VirtualTimePolicy, budget int) error {
+func (remote *RemoteDebugger) SetVirtualTimePolicy(policy VirtualTimePolicy, budget int, options ...setVirtualTimerPolicyOption) error {
 	params := Params{"policy": policy}
 
 	if budget > 0 {
 		params["budget"] = float64(budget)
+		params["waitForNavigation"] = true
+	}
+
+	for _, opt := range options {
+		opt(params)
 	}
 
 	_, err := remote.SendRequest("Emulation.setVirtualTimePolicy", params)

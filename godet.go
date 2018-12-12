@@ -905,6 +905,20 @@ func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
 	}
 }
 
+func (remote *RemoteDebugger) GetResponseBodyForInterception(iid string) ([]byte, error) {
+	res, err := remote.SendRequest("Network.getResponseBodyForInterception", Params{
+		"interceptionId": iid,
+	})
+
+	if err != nil {
+		return nil, err
+	} else if b, ok := res["base64Encoded"]; ok && b.(bool) {
+		return base64.StdEncoding.DecodeString(res["body"].(string))
+	} else {
+		return []byte(res["body"].(string)), nil
+	}
+}
+
 type Cookie struct {
 	Name     string  `json:"name"`
 	Value    string  `json:"value"`

@@ -352,6 +352,10 @@ func (remote *RemoteDebugger) Close() (err error) {
 	return
 }
 
+func (remote *RemoteDebugger) Verbose(v bool) {
+    remote.verbose = v
+}
+
 type wsMessage struct {
 	ID     int             `json:"id"`
 	Result json.RawMessage `json:"result"`

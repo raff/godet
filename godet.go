@@ -353,7 +353,7 @@ func (remote *RemoteDebugger) Close() (err error) {
 }
 
 func (remote *RemoteDebugger) Verbose(v bool) {
-    remote.verbose = v
+	remote.verbose = v
 }
 
 type wsMessage struct {

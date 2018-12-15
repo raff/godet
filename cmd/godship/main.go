@@ -11,7 +11,6 @@ import (
 
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -19,6 +18,12 @@ import (
 	"strings"
 	"time"
 )
+
+type mmap = map[string]interface{}
+
+func timestamp() string {
+	return time.Now().Format(time.RFC3339)
+}
 
 func unquote(s string) string {
 	if res, err := strconv.Unquote(strings.TrimSpace(s)); err == nil {
@@ -88,7 +93,8 @@ func limit(s string, l int) string {
 func documentNode(remote *godet.RemoteDebugger, verbose bool) int {
 	res, err := remote.GetDocument()
 	if err != nil {
-		log.Fatal("error getting document: ", err)
+		fmt.Println("error getting document: ", err)
+		return -1
 	}
 
 	if verbose {
@@ -183,7 +189,7 @@ func main() {
 		}
 
 		if err := runCommand(*cmdApp); err != nil {
-			log.Println("cannot start browser", err)
+			fmt.Println("cannot start browser", err)
 		}
 	}
 
@@ -200,21 +206,48 @@ func main() {
 			break
 		}
 
-		log.Println("connect", err)
+		fmt.Println("connect", err)
 	}
 
 	if err != nil {
-		log.Fatal("cannot connect to browser")
+		fmt.Println("cannot connect to browser")
+		return
 	}
 
 	defer remote.Close()
 
 	v, err := remote.Version()
 	if err != nil {
-		log.Fatal("cannot get version: ", err)
+		fmt.Println("cannot get version: ", err)
+		return
 	}
 
-	log.Println("connected to", v.Browser, "protocol version", v.ProtocolVersion)
+	fmt.Println("connected to", v.Browser, "protocol version", v.ProtocolVersion)
+
+	remote.CallbackEvent("Network.requestWillBeSent", func(params godet.Params) {
+		req := params.Map("request")
+
+		fmt.Println(timestamp(), "requestWillBeSent",
+			params["type"],
+			params["documentURL"],
+			"\n\t", req["method"], req["url"])
+
+		for k, v := range req["headers"].(mmap) {
+			fmt.Printf("\t%v: %v", k, v)
+		}
+	})
+
+	remote.CallbackEvent("Network.responseReceived", func(params godet.Params) {
+		resp := params.Map("response")
+		url := resp["url"].(string)
+
+		fmt.Println(timestamp(), "responseReceived",
+			params["type"],
+			limit(url, 80),
+			"\n\t\t\t",
+			int(resp["status"].(float64)),
+			resp["mimeType"].(string))
+	})
 
 	var interrupted bool
 
@@ -368,12 +401,12 @@ func main() {
 
 	commander.Commands["set"] = commander.Commands["var"]
 
-	switch len(os.Args) {
+	switch flag.NArg() {
 	case 1: // program name only
 		break
 
 	case 2: // one arg - expect URL or @filename
-		cmd := os.Args[1]
+		cmd := flag.Arg(0)
 		if !strings.HasPrefix(cmd, "@") {
 			cmd = "base " + cmd
 		}

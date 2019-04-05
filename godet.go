@@ -405,21 +405,16 @@ func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) 
 
 func (remote *RemoteDebugger) sendMessages() {
 	for message := range remote.requests {
-		bytes, err := json.Marshal(message)
-		if err != nil {
-			log.Println("marshal", message, err)
-			continue
-		}
-
-		if remote.verbose {
-			log.Println("SEND", string(bytes))
-		}
-
 		ws := remote.socket()
 		if ws == nil { // the socket is now closed
 			break
 		}
-		err = ws.WriteMessage(websocket.TextMessage, bytes)
+
+		if remote.verbose {
+			log.Printf("SEND %#v\n", message)
+		}
+
+		err := ws.WriteJSON(message)
 		if err != nil {
 			log.Println("write message:", err)
 		}
@@ -455,7 +450,9 @@ loop:
 				break loop
 			}
 
-			_, bytes, err := ws.ReadMessage()
+			var message wsMessage
+
+			err := ws.ReadJSON(&message)
 			if err != nil {
 				if remote.socket() != ws { // this socket is now closed
 					continue // one more check for remote.closed
@@ -465,49 +462,40 @@ loop:
 				if permanentError(err) {
 					break loop
 				}
+			} else if message.Method != "" {
+				if remote.verbose {
+					log.Println("EVENT", message.Method, string(message.Params), len(remote.events))
+				}
+
+				remote.Lock()
+				_, ok := remote.callbacks[message.Method]
+				remote.Unlock()
+
+				if !ok {
+					continue // don't queue unrequested events
+				}
+
+				select {
+				case remote.events <- message:
+
+				case <-remote.closed:
+					remoteClosed = true
+					break loop
+				}
 			} else {
-				var message wsMessage
-
 				//
-				// unmarshall message
+				// should be a method reply
 				//
-				if err := json.Unmarshal(bytes, &message); err != nil {
-					log.Println("unmarshal", string(bytes), len(bytes), err)
-				} else if message.Method != "" {
-					if remote.verbose {
-						log.Println("EVENT", message.Method, string(message.Params), len(remote.events))
-					}
+				if remote.verbose {
+					log.Println("REPLY", message.ID, string(message.Result))
+				}
 
-					remote.Lock()
-					_, ok := remote.callbacks[message.Method]
-					remote.Unlock()
+				remote.Lock()
+				ch := remote.responses[message.ID]
+				remote.Unlock()
 
-					if !ok {
-						continue // don't queue unrequested events
-					}
-
-					select {
-					case remote.events <- message:
-
-					case <-remote.closed:
-						remoteClosed = true
-						break loop
-					}
-				} else {
-					//
-					// should be a method reply
-					//
-					if remote.verbose {
-						log.Println("REPLY", message.ID, string(message.Result))
-					}
-
-					remote.Lock()
-					ch := remote.responses[message.ID]
-					remote.Unlock()
-
-					if ch != nil {
-						ch <- message.Result
-					}
+				if ch != nil {
+					ch <- message.Result
 				}
 			}
 		}

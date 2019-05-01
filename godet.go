@@ -227,10 +227,32 @@ func (p Params) Map(k string) map[string]interface{} {
 // EventCallback represents a callback event, associated with a method.
 type EventCallback func(params Params)
 
+type ConnectOption func(c *httpclient.HttpClient)
+
+// Host set the host header
+func Host(host string) ConnectOption {
+	return func(c *httpclient.HttpClient) {
+		c.Host = host
+	}
+}
+
+// Headers set specified HTTP headers
+func Headers(headers map[string]string) ConnectOption {
+	return func(c *httpclient.HttpClient) {
+		c.Headers = headers
+	}
+}
+
 // Connect to the remote debugger and return `RemoteDebugger` object.
-func Connect(port string, verbose bool) (*RemoteDebugger, error) {
+func Connect(port string, verbose bool, options ...ConnectOption) (*RemoteDebugger, error) {
+	client := httpclient.NewHttpClient("http://" + port)
+
+	for _, setOption := range options {
+		setOption(client)
+	}
+
 	remote := &RemoteDebugger{
-		http:      httpclient.NewHttpClient("http://" + port),
+		http:      client,
 		requests:  make(chan Params),
 		responses: map[int]chan json.RawMessage{},
 		callbacks: map[string]EventCallback{},

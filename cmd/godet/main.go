@@ -118,6 +118,7 @@ func main() {
 	close := flag.Bool("close", false, "gracefully close browser")
 	getCookies := flag.Bool("cookies", false, "get cookies for current page")
 	getAllCookies := flag.Bool("all-cookies", false, "get all cookies for current page")
+	body := flag.Bool("body", false, "show response body")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -239,19 +240,18 @@ func main() {
 				int(resp["status"].(float64)),
 				resp["mimeType"].(string))
 
-			/*
-				if params.String("type") == "Image" {
-					go func() {
-						req := params.String("requestId")
-						res, err := remote.GetResponseBody(req)
-						if err != nil {
-							log.Println("Error getting responseBody", err)
-						} else {
-							log.Println("ResponseBody", len(res), limit(string(res), 10))
-						}
-					}()
-				}
-			*/
+			if *body {
+				go func() {
+					req := params.String("requestId")
+					res, err := remote.GetResponseBody(req)
+					if err != nil {
+						log.Println("Error getting responseBody", err)
+					} else {
+						log.Printf("body (%v)\n", len(res))
+						log.Println(string(res))
+					}
+				}()
+			}
 		})
 	}
 

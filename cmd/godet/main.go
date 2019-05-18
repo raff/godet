@@ -100,6 +100,7 @@ func main() {
 	domains := flag.Bool("domains", false, "show list of available domains")
 	requests := flag.Bool("requests", false, "show request notifications")
 	responses := flag.Bool("responses", false, "show response notifications")
+	fetch := flag.Bool("fetch", false, "enable processing of requestPaused events (in the Fetch domain)")
 	allEvents := flag.Bool("all-events", false, "enable all events")
 	logev := flag.Bool("log", false, "show log/console messages")
 	query := flag.String("query", "", "query against current document")
@@ -345,6 +346,26 @@ func main() {
 		remote.EmulationEvents(true)
 	}
 
+	if *fetch {
+		remote.EnableRequestPaused(true)
+
+		remote.CallbackEvent("Fetch.requestPaused", func(params godet.Params) {
+			rid := params.String("requestId")
+			nid := params.String("networkId")
+			rtype := params.String("resourceType")
+
+			log.Println("request paused for", rid, nid, rtype, params.Map("request")["url"])
+			if v, ok := params["responseErrorReason"]; ok {
+				log.Println("  error reason:", v)
+			}
+			if v, ok := params["responseStatusCode"]; ok {
+				log.Println("  status code:", v)
+			}
+
+			remote.ContinueRequest(rid, "", "", "", nil)
+		})
+	}
+
 	if *control != "" {
 		remote.SetControlNavigations(true)
 		navigationResponse := godet.NavigationProceed
@@ -385,6 +406,12 @@ func main() {
 			log.Println("request intercepted for", iid, rtype, params.Map("request")["url"])
 			if reason != "" {
 				log.Println("  abort with reason", reason)
+			}
+			if params.Bool("isNavigationRequest") {
+				log.Println("  navigationRequest")
+			}
+			if params.Bool("isDownload") {
+				log.Println("  download")
 			}
 
 			remote.ContinueInterceptedRequest(iid, godet.ErrorReason(reason), "", "", "", "", nil)

@@ -44,6 +44,8 @@ const (
 	ErrorReasonNameNotResolved      = ErrorReason("NameNotResolved")
 	ErrorReasonInternetDisconnected = ErrorReason("InternetDisconnected")
 	ErrorReasonAddressUnreachable   = ErrorReason("AddressUnreachable")
+	ErrorReasonBlockedByClient      = ErrorReason("BlockedByClient")
+	ErrorReasonBlockedByResponse    = ErrorReason("BlockedByResponse")
 
 	// VirtualTimePolicyAdvance specifies that if the scheduler runs out of immediate work, the virtual time base may fast forward to allow the next delayed task (if any) to run
 	VirtualTimePolicyAdvance = VirtualTimePolicy("advance")
@@ -213,15 +215,23 @@ type RemoteDebugger struct {
 type Params map[string]interface{}
 
 func (p Params) String(k string) string {
-	return p[k].(string)
+	val, _ := p[k].(string)
+	return val
 }
 
 func (p Params) Int(k string) int {
-	return int(p[k].(float64))
+	val, _ := p[k].(float64)
+	return int(val)
+}
+
+func (p Params) Bool(k string) bool {
+	val, _ := p[k].(bool)
+	return val
 }
 
 func (p Params) Map(k string) map[string]interface{} {
-	return p[k].(map[string]interface{})
+	val, _ := p[k].(map[string]interface{})
+	return val
 }
 
 // EventCallback represents a callback event, associated with a method.
@@ -1001,19 +1011,22 @@ func (remote *RemoteDebugger) GetAllCookies() ([]Cookie, error) {
 type ResourceType string
 
 const (
-	ResourceTypeDocument    = ResourceType("Document")
-	ResourceTypeStylesheet  = ResourceType("Stylesheet")
-	ResourceTypeImage       = ResourceType("Image")
-	ResourceTypeMedia       = ResourceType("Media")
-	ResourceTypeFont        = ResourceType("Font")
-	ResourceTypeScript      = ResourceType("Script")
-	ResourceTypeTextTrack   = ResourceType("TextTrack")
-	ResourceTypeXHR         = ResourceType("XHR")
-	ResourceTypeFetch       = ResourceType("Fetch")
-	ResourceTypeEventSource = ResourceType("EventSource")
-	ResourceTypeWebSocket   = ResourceType("WebSocket")
-	ResourceTypeManifest    = ResourceType("Manifest")
-	ResourceTypeOther       = ResourceType("Other")
+	ResourceTypeDocument           = ResourceType("Document")
+	ResourceTypeStylesheet         = ResourceType("Stylesheet")
+	ResourceTypeImage              = ResourceType("Image")
+	ResourceTypeMedia              = ResourceType("Media")
+	ResourceTypeFont               = ResourceType("Font")
+	ResourceTypeScript             = ResourceType("Script")
+	ResourceTypeTextTrack          = ResourceType("TextTrack")
+	ResourceTypeXHR                = ResourceType("XHR")
+	ResourceTypeFetch              = ResourceType("Fetch")
+	ResourceTypeEventSource        = ResourceType("EventSource")
+	ResourceTypeWebSocket          = ResourceType("WebSocket")
+	ResourceTypeManifest           = ResourceType("Manifest")
+	ResourceTypeSignedExchange     = ResourceType("SignedExchange")
+	ResourceTypePing               = ResourceType("Ping")
+	ResourceTypeCSPViolationReport = ResourceType("CSPViolationReport")
+	ResourceTypeOther              = ResourceType("Other")
 )
 
 type InterceptionStage string
@@ -1093,6 +1106,107 @@ func (remote *RemoteDebugger) ContinueInterceptedRequest(interceptionID string,
 
 	_, err := remote.SendRequest("Network.continueInterceptedRequest", params)
 	return err
+}
+
+// EnableRequestPaused enables issuing of requestPaused events.
+// A request will be paused until client calls one of
+// failRequest, fulfillRequest or continueRequest/continueWithAuth.
+//
+// If patterns is specified, only requests matching any of these patterns will produce
+// fetchRequested event and will be paused until clients response.
+// If not set,all requests will be affected.
+func (remote *RemoteDebugger) EnableRequestPaused(enable bool, patterns ...RequestPattern) error {
+	if !enable {
+		_, err := remote.SendRequest("Fetch.disable", nil)
+		return err
+	}
+
+	var params Params
+	if len(patterns) > 0 {
+		params["patterns"] = patterns
+	}
+
+	_, err := remote.SendRequest("Fetch.enable", params)
+	return err
+}
+
+// ContinueRequest is the response to Fetch.requestPaused
+// which either modifies the request to continue with any modifications, or blocks it,
+// or completes it with the provided response bytes.
+//
+// Parameters:
+//  url string - if set the request url will be modified in a way that's not observable by page.
+//  method string - if set this allows the request method to be overridden.
+//  postData string - if set this allows postData to be set.
+//  headers Headers - if set this allows the request headers to be changed.
+func (remote *RemoteDebugger) ContinueRequest(requestID string,
+	url string,
+	method string,
+	postData string,
+	headers map[string]string) error {
+	params := Params{
+		"requestId": requestID,
+	}
+
+	if url != "" {
+		params["url"] = url
+	}
+	if method != "" {
+		params["method"] = method
+	}
+	if postData != "" {
+		params["postData"] = postData
+	}
+	if headers != nil {
+		params["headers"] = headers
+	}
+
+	_, err := remote.SendRequest("Fetch.continueRequest", params)
+	return err
+}
+
+// FailRequest causes the request to fail with specified reason.
+func (remote *RemoteDebugger) FailRequest(requestID string, errorReason ErrorReason) error {
+	_, err := remote.SendRequest("Fetch.continueRequest", Params{
+		"requestId":   requestID,
+		"errorReason": errorReason,
+	})
+
+	return err
+}
+
+// FullfillRequest provides a response to the request.
+func (remote *RemoteDebugger) FullfillRequest(requestID string, responseCode int, responsePhrase string, headers map[string]string, body []byte) error {
+	params := Params{
+		"requestId":       requestID,
+		"responseCode":    responseCode,
+		"responseHeaders": headers,
+	}
+
+	if responsePhrase != "" {
+		params["responsePhrase"] = responsePhrase
+	}
+
+	if body != nil {
+		params["body"] = body
+	}
+
+	_, err := remote.SendRequest("Fetch.fullfillRequest", params)
+	return err
+}
+
+func (remote *RemoteDebugger) FetchResponseBody(requestId string) ([]byte, error) {
+	res, err := remote.SendRequest("Fetch.getResponseBody", Params{
+		"requestId": requestId,
+	})
+
+	if err != nil {
+		return nil, err
+	} else if b, ok := res["base64Encoded"]; ok && b.(bool) {
+		return base64.StdEncoding.DecodeString(res["body"].(string))
+	} else {
+		return []byte(res["body"].(string)), nil
+	}
 }
 
 // GetDocument gets the "Document" object as a DevTool node.

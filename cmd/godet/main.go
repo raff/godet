@@ -120,6 +120,8 @@ func main() {
 	getCookies := flag.Bool("cookies", false, "get cookies for current page")
 	getAllCookies := flag.Bool("all-cookies", false, "get all cookies for current page")
 	body := flag.Bool("body", false, "show response body")
+	bypass := flag.Bool("bypass", false, "bypass service workers")
+	download := flag.String("download", "", "download behavour (default,allow,deny)")
 	flag.Parse()
 
 	if *cmd != "" {
@@ -305,6 +307,10 @@ func main() {
 		remote.SetBlockedURLs(blocks...)
 	}
 
+	if *bypass {
+		remote.SetBypassServiceWorker(true)
+	}
+
 	var site string
 
 	if flag.NArg() > 0 {
@@ -344,6 +350,18 @@ func main() {
 		remote.DOMEvents(true)
 		remote.LogEvents(true)
 		remote.EmulationEvents(true)
+		remote.ServiceWorkerEvents(true)
+	}
+
+	if *download != "" {
+		var path string
+
+		parts := strings.SplitN(*download, ",", 2)
+		behavior := godet.DownloadBehavior(parts[0])
+		if len(parts) > 1 {
+			path = parts[1]
+		}
+		remote.SetDownloadBehavior(behavior, path)
 	}
 
 	if *fetch {

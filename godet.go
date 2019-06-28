@@ -24,6 +24,9 @@ const (
 	// EventClosed represents the "RemoteDebugger.closed" event.
 	// It is emitted when RemoteDebugger.Close() is called.
 	EventClosed = "RemoteDebugger.closed"
+	// EventClosed represents the "RemoteDebugger.disconnected" event.
+	// It is emitted when we lose connection with the debugger and we stop reading events
+	EventDisconnect = "RemoteDebugger.disconnected"
 
 	// NavigationProceed allows the navigation
 	NavigationProceed = NavigationResponse("Proceed")
@@ -538,6 +541,8 @@ loop:
 	if remoteClosed {
 		remote.events <- wsMessage{Method: EventClosed, Params: []byte("{}")}
 		close(remote.events)
+	} else {
+		remote.events <- wsMessage{Method: EventDisconnected, Params: []byte("{}")}
 	}
 }
 
@@ -1496,13 +1501,56 @@ func (remote *RemoteDebugger) MouseEvent(ev MouseEvent, x, y int, options ...Mou
 	return err
 }
 
+type EvaluateOption func(params Params)
+
+func UserGesture(enable bool) EvaluateOption {
+	return func(params Params) {
+		params["userGesture"] = enable
+	}
+}
+
+func ReturnByValue(enable bool) EvaluateOption {
+	return func(params Params) {
+		params["returnByValue"] = enable
+	}
+}
+
+func Silent(enable bool) EvaluateOption {
+	return func(params Params) {
+		params["silent"] = enable
+	}
+}
+
+func IncludeCommandLineAPI(enable bool) EvaluateOption {
+	return func(params Params) {
+		params["includeCommandLineAPI"] = enable
+	}
+}
+
+func GeneratePreview(enable bool) EvaluateOption {
+	return func(params Params) {
+		params["generatePreview"] = enable
+	}
+}
+
+func ThrowOnSideEffect(enable bool) EvaluateOption {
+	return func(params Params) {
+		params["throwOnSideEffect"] = enable
+	}
+}
+
 // Evaluate evalutes a Javascript function in the context of the current page.
-func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
-	res, err := remote.SendRequest("Runtime.evaluate", Params{
+func (remote *RemoteDebugger) Evaluate(expr string, options ...EvaluateOption) (interface{}, error) {
+	params := Params{
 		"expression":    expr,
 		"returnByValue": true,
-	})
+	}
 
+	for _, opt := range options {
+		opt(params)
+	}
+
+	res, err := remote.SendRequest("Runtime.evaluate", params)
 	if err != nil {
 		return nil, err
 	}
@@ -1523,9 +1571,9 @@ func (remote *RemoteDebugger) Evaluate(expr string) (interface{}, error) {
 
 // EvaluateWrap evaluates a list of expressions, EvaluateWrap wraps them in `(function(){ ... })()`.
 // Use a return statement to return a value.
-func (remote *RemoteDebugger) EvaluateWrap(expr string) (interface{}, error) {
+func (remote *RemoteDebugger) EvaluateWrap(expr string, options ...EvaluateOption) (interface{}, error) {
 	expr = fmt.Sprintf("(function(){%v})()", expr)
-	return remote.Evaluate(expr)
+	return remote.Evaluate(expr, options...)
 }
 
 // SetBlockedURLs blocks URLs from loading (wildcards '*' are allowed)
@@ -1568,9 +1616,18 @@ func (remote *RemoteDebugger) ClearBrowserCookies() error {
 	return err
 }
 
+// SetCacheDisabled toggles ignoring cache for each request. If `true`, cache will not be used.
 func (remote *RemoteDebugger) SetCacheDisabled(disabled bool) error {
 	_, err := remote.SendRequest("Network.setCacheDisabled", Params{
 		"cacheDisabled": disabled,
+	})
+	return err
+}
+
+// SetBypassServiceWorker toggles ignoring of service worker for each request
+func (remote *RemoteDebugger) SetBypassServiceWorker(bypass bool) error {
+	_, err := remote.SendRequest("Network.setBypassServiceWorker", Params{
+		"bypass": bypass,
 	})
 	return err
 }
@@ -1715,6 +1772,11 @@ func (remote *RemoteDebugger) ProfilerEvents(enable bool) error {
 // EmulationEvents enables Emulation events listening.
 func (remote *RemoteDebugger) EmulationEvents(enable bool) error {
 	return remote.DomainEvents("Emulation", enable)
+}
+
+// ServiceWorkerEvents enables ServiceWorker events listening.
+func (remote *RemoteDebugger) ServiceWorkerEvents(enable bool) error {
+	return remote.DomainEvents("ServiceWorker", enable)
 }
 
 // ConsoleAPICallback processes the Runtime.consolAPICalled event and returns printable info

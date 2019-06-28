@@ -541,7 +541,7 @@ loop:
 	if remoteClosed {
 		remote.events <- wsMessage{Method: EventClosed, Params: []byte("{}")}
 		close(remote.events)
-	} else {
+	} else if remote.socket() == ws { // we should still be connected but something is wrong
 		remote.events <- wsMessage{Method: EventDisconnect, Params: []byte("{}")}
 	}
 }

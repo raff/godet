@@ -542,7 +542,7 @@ loop:
 		remote.events <- wsMessage{Method: EventClosed, Params: []byte("{}")}
 		close(remote.events)
 	} else {
-		remote.events <- wsMessage{Method: EventDisconnected, Params: []byte("{}")}
+		remote.events <- wsMessage{Method: EventDisconnect, Params: []byte("{}")}
 	}
 }
 

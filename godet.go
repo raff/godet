@@ -394,13 +394,13 @@ func (remote *RemoteDebugger) Verbose(v bool) {
 var loggerStatus = false
 var eventChan = make(chan wsMessage, 1000000)
 
-func LoggerStart() {
+func (remote *RemoteDebugger)LoggerStart() {
 	LoggerStatus = true
 }
-func LoggerStop()  {
+func (remote *RemoteDebugger)LoggerStop()  {
 	LoggerStatus = false
 }
-func LoggerReader() (em []EventMessage) {
+func (remote *RemoteDebugger)LoggerReader() (em []EventMessage) {
 	if len(eventChan) > 0 {
 		ev := <-eventChan
 		var ret EventMessage
@@ -475,6 +475,8 @@ func (remote *RemoteDebugger) sendMessages() {
 		if ws == nil { // the socket is now closed
 			break
 		}
+		ec ,_ := json.Marshal(message)
+		eventChan <- wsMessage{Params:"sendMessages",Method:"SEND",Result:ec}
 
 		if remote.verbose {
 			log.Printf("SEND %#v\n", message)

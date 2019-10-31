@@ -391,6 +391,37 @@ func (remote *RemoteDebugger) Verbose(v bool) {
 	remote.verbose = v
 }
 
+var loggerStatus = false
+var eventChan = make(chan wsMessage, 1000000)
+
+func LoggerStart() {
+	LoggerStatus = true
+}
+func LoggerStop()  {
+	LoggerStatus = false
+}
+func LoggerReader() (em []EventMessage) {
+	if len(eventChan) > 0 {
+		ev := <-eventChan
+		var ret EventMessage
+		ret.Method = ev.Method
+		ret.Result = ev.Result
+		ret.ID = ev.ID
+		ret.Params = ev.Params
+		em = append(em, ret)
+	}
+	return em
+
+}
+
+type EventMessage struct {
+	ID     int             `json:"id"`
+	Result json.RawMessage `json:"result"`
+
+	Method string          `json:"Method"`
+	Params json.RawMessage `json:"Params"`
+}
+
 type wsMessage struct {
 	ID     int             `json:"id"`
 	Result json.RawMessage `json:"result"`
@@ -548,6 +579,7 @@ loop:
 
 func (remote *RemoteDebugger) processEvents() {
 	for ev := range remote.events {
+		eventChan <- ev
 		remote.Lock()
 		cb := remote.callbacks[ev.Method]
 		remote.Unlock()

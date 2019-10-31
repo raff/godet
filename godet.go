@@ -395,10 +395,10 @@ var loggerStatus = false
 var eventChan = make(chan wsMessage, 1000000)
 
 func (remote *RemoteDebugger)LoggerStart() {
-	LoggerStatus = true
+	loggerStatus = true
 }
 func (remote *RemoteDebugger)LoggerStop()  {
-	LoggerStatus = false
+	loggerStatus = false
 }
 func (remote *RemoteDebugger)LoggerReader() (em []EventMessage) {
 	if len(eventChan) > 0 {
@@ -476,7 +476,7 @@ func (remote *RemoteDebugger) sendMessages() {
 			break
 		}
 		ec ,_ := json.Marshal(message)
-		eventChan <- wsMessage{Params:"sendMessages",Method:"SEND",Result:ec}
+		eventChan <- wsMessage{Params:ec,Method:"SEND",Result:ec}
 
 		if remote.verbose {
 			log.Printf("SEND %#v\n", message)

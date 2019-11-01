@@ -475,8 +475,11 @@ func (remote *RemoteDebugger) sendMessages() {
 		if ws == nil { // the socket is now closed
 			break
 		}
-		ec ,_ := json.Marshal(message)
-		eventChan <- wsMessage{Params:ec,Method:"SEND",Result:ec}
+		if true == loggerStatus {
+			ec ,_ := json.Marshal(message)
+			eventChan <- wsMessage{Params:ec,Method:"SEND",Result:ec}
+		}
+
 
 		if remote.verbose {
 			log.Printf("SEND %#v\n", message)
@@ -581,7 +584,10 @@ loop:
 
 func (remote *RemoteDebugger) processEvents() {
 	for ev := range remote.events {
-		eventChan <- ev
+		if true == loggerStatus {
+			eventChan <- ev
+		}
+
 		remote.Lock()
 		cb := remote.callbacks[ev.Method]
 		remote.Unlock()

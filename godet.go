@@ -394,13 +394,13 @@ func (remote *RemoteDebugger) Verbose(v bool) {
 var loggerStatus = false
 var eventChan = make(chan wsMessage, 1000000)
 
-func (remote *RemoteDebugger)LoggerStart() {
+func (remote *RemoteDebugger) LoggerStart() {
 	loggerStatus = true
 }
-func (remote *RemoteDebugger)LoggerStop()  {
+func (remote *RemoteDebugger) LoggerStop() {
 	loggerStatus = false
 }
-func (remote *RemoteDebugger)LoggerReader() (em []EventMessage) {
+func (remote *RemoteDebugger) LoggerReader() (em []EventMessage) {
 	if len(eventChan) > 0 {
 		ev := <-eventChan
 		var ret EventMessage
@@ -441,6 +441,9 @@ func (remote *RemoteDebugger) SendRequest(method string, params Params) (map[str
 
 // sendRawReplyRequest sends a request and returns the reply bytes.
 func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) ([]byte, error) {
+	if true == hasPermanentError {
+		return nil, errors.New("hasPermanentError")
+	}
 	remote.Lock()
 	if remote.ws == nil {
 		remote.Unlock()
@@ -460,6 +463,7 @@ func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) 
 	}
 
 	remote.requests <- command
+
 	reply := <-responseChan
 
 	remote.Lock()
@@ -476,10 +480,9 @@ func (remote *RemoteDebugger) sendMessages() {
 			break
 		}
 		if true == loggerStatus {
-			ec ,_ := json.Marshal(message)
-			eventChan <- wsMessage{Params:ec,Method:"SEND",Result:ec}
+			ec, _ := json.Marshal(message)
+			eventChan <- wsMessage{Params: ec, Method: "SEND", Result: ec}
 		}
-
 
 		if remote.verbose {
 			log.Printf("SEND %#v\n", message)
@@ -488,20 +491,24 @@ func (remote *RemoteDebugger) sendMessages() {
 		err := ws.WriteJSON(message)
 		if err != nil {
 			log.Println("write message:", err)
-		}else {
+		} else {
 			log.Println("write message success:", err)
 		}
 	}
 }
 
+var hasPermanentError = false
+
 func permanentError(err error) bool {
 	if websocket.IsUnexpectedCloseError(err) {
-		log.Println("unexpected close error",err)
+		log.Println("unexpected close error", err)
+		hasPermanentError = true
 		return true
 	}
 
 	if neterr, ok := err.(net.Error); ok && !neterr.Temporary() {
 		log.Println("permanent network error")
+		hasPermanentError = true
 		return true
 	}
 
@@ -533,7 +540,7 @@ loop:
 
 				log.Println("read message:", err)
 				if permanentError(err) {
-					log.Println("permanentError read message:", err)
+					log.Println("permanentError reading message:", err)
 					break loop
 				}
 			} else if message.Method != "" {

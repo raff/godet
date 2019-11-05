@@ -488,13 +488,15 @@ func (remote *RemoteDebugger) sendMessages() {
 		err := ws.WriteJSON(message)
 		if err != nil {
 			log.Println("write message:", err)
+		}else {
+			log.Println("write message success:", err)
 		}
 	}
 }
 
 func permanentError(err error) bool {
 	if websocket.IsUnexpectedCloseError(err) {
-		log.Println("unexpected close error")
+		log.Println("unexpected close error",err)
 		return true
 	}
 
@@ -531,6 +533,7 @@ loop:
 
 				log.Println("read message:", err)
 				if permanentError(err) {
+					log.Println("permanentError read message:", err)
 					break loop
 				}
 			} else if message.Method != "" {

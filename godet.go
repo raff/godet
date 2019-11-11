@@ -481,6 +481,7 @@ func (remote *RemoteDebugger) sendMessages() {
 		}
 		if true == loggerStatus {
 			ec, _ := json.Marshal(message)
+			log.Println("write message start:", string(ec))
 			eventChan <- wsMessage{Params: ec, Method: "SEND", Result: ec}
 		}
 

@@ -479,8 +479,9 @@ func (remote *RemoteDebugger) sendMessages() {
 		if ws == nil { // the socket is now closed
 			break
 		}
+		var ec []byte
+		ec, _ = json.Marshal(message)
 		if true == loggerStatus {
-			ec, _ := json.Marshal(message)
 			log.Println("write message start:", string(ec))
 			eventChan <- wsMessage{Params: ec, Method: "SEND", Result: ec}
 		}
@@ -490,9 +491,12 @@ func (remote *RemoteDebugger) sendMessages() {
 		}
 
 		err := ws.WriteJSON(message)
+
 		if err != nil {
+			log.Println("GODET-SEND-FAIL %#v\n",err, string(ec))
 			log.Println("write message:", err)
 		} else {
+			log.Println("GODET-SEND-SUCCESS %#v\n",err, string(ec))
 			log.Println("write message success:", err)
 		}
 	}

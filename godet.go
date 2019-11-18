@@ -391,37 +391,6 @@ func (remote *RemoteDebugger) Verbose(v bool) {
 	remote.verbose = v
 }
 
-var loggerStatus = false
-var eventChan = make(chan wsMessage, 1000000)
-
-func (remote *RemoteDebugger) LoggerStart() {
-	loggerStatus = true
-}
-func (remote *RemoteDebugger) LoggerStop() {
-	loggerStatus = false
-}
-func (remote *RemoteDebugger) LoggerReader() (em []EventMessage) {
-	if len(eventChan) > 0 {
-		ev := <-eventChan
-		var ret EventMessage
-		ret.Method = ev.Method
-		ret.Result = ev.Result
-		ret.ID = ev.ID
-		ret.Params = ev.Params
-		em = append(em, ret)
-	}
-	return em
-
-}
-
-type EventMessage struct {
-	ID     int             `json:"id"`
-	Result json.RawMessage `json:"result"`
-
-	Method string          `json:"Method"`
-	Params json.RawMessage `json:"Params"`
-}
-
 type wsMessage struct {
 	ID     int             `json:"id"`
 	Result json.RawMessage `json:"result"`
@@ -441,9 +410,6 @@ func (remote *RemoteDebugger) SendRequest(method string, params Params) (map[str
 
 // sendRawReplyRequest sends a request and returns the reply bytes.
 func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) ([]byte, error) {
-	if true == hasPermanentError {
-		return nil, errors.New("hasPermanentError")
-	}
 	remote.Lock()
 	if remote.ws == nil {
 		remote.Unlock()
@@ -463,7 +429,6 @@ func (remote *RemoteDebugger) sendRawReplyRequest(method string, params Params) 
 	}
 
 	remote.requests <- command
-
 	reply := <-responseChan
 
 	remote.Lock()
@@ -479,41 +444,26 @@ func (remote *RemoteDebugger) sendMessages() {
 		if ws == nil { // the socket is now closed
 			break
 		}
-		var ec []byte
-		ec, _ = json.Marshal(message)
-		if true == loggerStatus {
-			log.Println("write message start:", string(ec))
-			eventChan <- wsMessage{Params: ec, Method: "SEND", Result: ec}
-		}
 
 		if remote.verbose {
 			log.Printf("SEND %#v\n", message)
 		}
 
 		err := ws.WriteJSON(message)
-
 		if err != nil {
-			log.Println("GODET-SEND-FAIL %#v\n", err, string(ec))
 			log.Println("write message:", err)
-		} else {
-			log.Println("GODET-SEND-SUCCESS:", err, string(ec))
-			log.Println("write message success:", err)
 		}
 	}
 }
 
-var hasPermanentError = false
-
 func permanentError(err error) bool {
 	if websocket.IsUnexpectedCloseError(err) {
-		log.Println("unexpected close error", err)
-		hasPermanentError = true
+		log.Println("unexpected close error")
 		return true
 	}
 
 	if neterr, ok := err.(net.Error); ok && !neterr.Temporary() {
 		log.Println("permanent network error")
-		hasPermanentError = true
 		return true
 	}
 
@@ -545,7 +495,6 @@ loop:
 
 				log.Println("read message:", err)
 				if permanentError(err) {
-					log.Println("permanentError reading message:", err)
 					break loop
 				}
 			} else if message.Method != "" {
@@ -599,10 +548,6 @@ loop:
 
 func (remote *RemoteDebugger) processEvents() {
 	for ev := range remote.events {
-		if true == loggerStatus {
-			eventChan <- ev
-		}
-
 		remote.Lock()
 		cb := remote.callbacks[ev.Method]
 		remote.Unlock()
@@ -1014,22 +959,6 @@ type Cookie struct {
 	Secure   bool    `json:"secure"`
 	Session  bool    `json:"session"`
 	SameSite string  `json:"sameSite"`
-}
-
-func (remote *RemoteDebugger) SetCookies(cookies []Cookie)error {
-	params := Params{}
-	if len(cookies) < 1 {
-		return errors.New("empty cookies")
-	} else {
-		params["cookies"] = cookies
-	}
-	_, err := remote.SendRequest("Network.setCookies", params)
-	if err != nil {
-		return err
-	} else {
-		return nil
-	}
-
 }
 
 // GetCookies returns all browser cookies for the current URL.

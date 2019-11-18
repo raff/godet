@@ -493,10 +493,10 @@ func (remote *RemoteDebugger) sendMessages() {
 		err := ws.WriteJSON(message)
 
 		if err != nil {
-			log.Println("GODET-SEND-FAIL %#v\n",err, string(ec))
+			log.Println("GODET-SEND-FAIL %#v\n", err, string(ec))
 			log.Println("write message:", err)
 		} else {
-			log.Println("GODET-SEND-SUCCESS %#v\n",err, string(ec))
+			log.Println("GODET-SEND-SUCCESS %#v\n", err, string(ec))
 			log.Println("write message success:", err)
 		}
 	}
@@ -1014,6 +1014,22 @@ type Cookie struct {
 	Secure   bool    `json:"secure"`
 	Session  bool    `json:"session"`
 	SameSite string  `json:"sameSite"`
+}
+
+func (remote *RemoteDebugger) SetCookies(cookies []Cookie)error {
+	params := Params{}
+	if len(cookies) < 1 {
+		return errors.New("empty cookies")
+	} else {
+		params["cookies"] = cookies
+	}
+	_, err := remote.SendRequest("Network.setCookies", params)
+	if err != nil {
+		return err
+	} else {
+		return nil
+	}
+
 }
 
 // GetCookies returns all browser cookies for the current URL.

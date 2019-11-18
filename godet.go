@@ -496,7 +496,7 @@ func (remote *RemoteDebugger) sendMessages() {
 			log.Println("GODET-SEND-FAIL %#v\n", err, string(ec))
 			log.Println("write message:", err)
 		} else {
-			log.Println("GODET-SEND-SUCCESS %#v\n", err, string(ec))
+			log.Println("GODET-SEND-SUCCESS:", err, string(ec))
 			log.Println("write message success:", err)
 		}
 	}

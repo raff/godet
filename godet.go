@@ -1016,17 +1016,10 @@ func (remote *RemoteDebugger) GetAllCookies() ([]Cookie, error) {
 //Set browser cookies  
 func (remote *RemoteDebugger) SetCookies(cookies []Cookie)error {
 	params := Params{}
-	if len(cookies) < 1 {
-		return errors.New("empty cookies")
-	} else {
-		params["cookies"] = cookies
-	}
+	params["cookies"] = cookies
+	
 	_, err := remote.SendRequest("Network.setCookies", params)
-	if err != nil {
-		return err
-	} else {
-		return nil
-	}
+	return err
 
 }
 

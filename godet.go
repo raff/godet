@@ -1182,7 +1182,7 @@ func (remote *RemoteDebugger) ContinueRequest(requestID string,
 
 // FailRequest causes the request to fail with specified reason.
 func (remote *RemoteDebugger) FailRequest(requestID string, errorReason ErrorReason) error {
-	_, err := remote.SendRequest("Fetch.continueRequest", Params{
+	_, err := remote.SendRequest("Fetch.failRequest", Params{
 		"requestId":   requestID,
 		"errorReason": errorReason,
 	})

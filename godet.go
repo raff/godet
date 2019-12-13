@@ -1013,14 +1013,45 @@ func (remote *RemoteDebugger) GetAllCookies() ([]Cookie, error) {
 	return cookies.Cookies, nil
 }
 
-//Set browser cookies  
-func (remote *RemoteDebugger) SetCookies(cookies []Cookie)error {
+//Set browser cookies
+func (remote *RemoteDebugger) SetCookies(cookies []Cookie) error {
 	params := Params{}
 	params["cookies"] = cookies
-	
+
 	_, err := remote.SendRequest("Network.setCookies", params)
 	return err
+}
 
+//Set browser cookie
+func (remote *RemoteDebugger) SetCookie(cookie Cookie) bool {
+	params := Params{}
+	params["name"] = cookie.Name
+	params["value"] = cookie.Value
+	if cookie.Domain != "" {
+		params["domain"] = cookie.Domain
+	}
+	if cookie.Path != "" {
+		params["path"] = cookie.Path
+	}
+	if cookie.Secure {
+		params["secure"] = cookie.Secure
+	}
+	if cookie.HttpOnly {
+		params["httpOnly"] = cookie.HttpOnly
+	}
+	if cookie.SameSite != "" {
+		params["sameSite"] = cookie.SameSite
+	}
+	if cookie.Expires > 0 {
+		params["expires"] = cookie.Expires
+	}
+
+	res, err := remote.SendRequest("Network.setCookies", params)
+	if err != nil {
+		return false
+	}
+
+	return res["success"].(bool)
 }
 
 type ResourceType string

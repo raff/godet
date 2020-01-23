@@ -1076,16 +1076,26 @@ const (
 )
 
 type InterceptionStage string
+type RequestStage string
 
 const (
 	StageRequest         = InterceptionStage("Request")
 	StageHeadersReceived = InterceptionStage("HeadersReceived")
+
+	RequestStageRequest  = RequestStage("Request")
+	RequestStageResponse = RequestStage("Response")
 )
 
 type RequestPattern struct {
 	UrlPattern        string            `json:"urlPattern,omitempty"`
 	ResourceType      ResourceType      `json:"resourceType,omitempty"`
 	InterceptionStage InterceptionStage `json:"interceptionStage,omitempty"`
+}
+
+type FetchRequestPattern struct {
+	UrlPattern   string       `json:"urlPattern,omitempty"`
+	ResourceType ResourceType `json:"resourceType,omitempty"`
+	RequestStage RequestStage `json:"requestStage,omitempty"`
 }
 
 // SetRequestInterception sets the requests to intercept that match the provided patterns
@@ -1161,15 +1171,16 @@ func (remote *RemoteDebugger) ContinueInterceptedRequest(interceptionID string,
 // If patterns is specified, only requests matching any of these patterns will produce
 // fetchRequested event and will be paused until clients response.
 // If not set,all requests will be affected.
-func (remote *RemoteDebugger) EnableRequestPaused(enable bool, patterns ...RequestPattern) error {
+func (remote *RemoteDebugger) EnableRequestPaused(enable bool, patterns ...FetchRequestPattern) error {
 	if !enable {
 		_, err := remote.SendRequest("Fetch.disable", nil)
 		return err
 	}
 
 	var params Params
+
 	if len(patterns) > 0 {
-		params["patterns"] = patterns
+		params = Params{"patterns": patterns}
 	}
 
 	_, err := remote.SendRequest("Fetch.enable", params)

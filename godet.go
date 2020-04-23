@@ -58,6 +58,7 @@ const (
 	VirtualTimePolicyPauseIfNetworkFetchesPending = VirtualTimePolicy("pauseIfNetworkFetchesPending")
 
 	AllowDownload   = DownloadBehavior("allow")
+	NameDownload    = DownloadBehavior("allowAndName")
 	DenyDownload    = DownloadBehavior("deny")
 	DefaultDownload = DownloadBehavior("default")
 )

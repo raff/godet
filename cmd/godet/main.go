@@ -45,35 +45,37 @@ func documentNode(remote *godet.RemoteDebugger, verbose bool) int {
 }
 
 func main() {
-	var chromeapp string
+	chromeapp := os.Getenv("GODET_CHROMEAPP")
 
-	switch runtime.GOOS {
-	case "darwin":
-		for _, c := range []string{
-			"/Applications/Google Chrome Canary.app",
-			"/Applications/Google Chrome.app",
-		} {
-			// MacOS apps are actually folders
-			if info, err := os.Stat(c); err == nil && info.IsDir() {
-				chromeapp = fmt.Sprintf("open %q --args", c)
-				break
+	if chromeapp == "" {
+		switch runtime.GOOS {
+		case "darwin":
+			for _, c := range []string{
+				"/Applications/Google Chrome Canary.app",
+				"/Applications/Google Chrome.app",
+			} {
+				// MacOS apps are actually folders
+				if info, err := os.Stat(c); err == nil && info.IsDir() {
+					chromeapp = fmt.Sprintf("open %q --args", c)
+					break
+				}
 			}
-		}
 
-	case "linux":
-		for _, c := range []string{
-			"headless_shell",
-			"chromium",
-			"google-chrome-beta",
-			"google-chrome-unstable",
-			"google-chrome-stable"} {
-			if _, err := exec.LookPath(c); err == nil {
-				chromeapp = c
-				break
+		case "linux":
+			for _, c := range []string{
+				"headless_shell",
+				"chromium",
+				"google-chrome-beta",
+				"google-chrome-unstable",
+				"google-chrome-stable"} {
+				if _, err := exec.LookPath(c); err == nil {
+					chromeapp = c
+					break
+				}
 			}
-		}
 
-	case "windows":
+		case "windows":
+		}
 	}
 
 	if chromeapp != "" {

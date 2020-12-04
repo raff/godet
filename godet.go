@@ -1233,8 +1233,8 @@ func (remote *RemoteDebugger) FailRequest(requestID string, errorReason ErrorRea
 	return err
 }
 
-// FullfillRequest provides a response to the request.
-func (remote *RemoteDebugger) FullfillRequest(requestID string, responseCode int, responsePhrase string, headers map[string]string, body []byte) error {
+// FulfillRequest provides a response to the request.
+func (remote *RemoteDebugger) FulfillRequest(requestID string, responseCode int, responsePhrase string, headers map[string]string, body []byte) error {
 	params := Params{
 		"requestId":       requestID,
 		"responseCode":    responseCode,
@@ -1249,7 +1249,7 @@ func (remote *RemoteDebugger) FullfillRequest(requestID string, responseCode int
 		params["body"] = body
 	}
 
-	_, err := remote.SendRequest("Fetch.fullfillRequest", params)
+	_, err := remote.SendRequest("Fetch.fulfillRequest", params)
 	return err
 }
 

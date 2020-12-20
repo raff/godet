@@ -399,13 +399,40 @@ func main() {
 		},
 		nil})
 
+	commander.Add(cmd.Command{
+		"html",
+		"html [html body]",
+		func(line string) (stop bool) {
+			id := documentNode(remote, *verbose)
+
+			if line == "" {
+				res, err := remote.GetOuterHTML(id)
+				if err != nil {
+					setResult(err)
+					return
+				}
+
+				setResult(res)
+			} else {
+				err = remote.SetOuterHTML(id, line)
+				if err != nil {
+					setResult(err)
+					return
+				}
+			}
+
+			return
+		},
+		nil})
+
 	commander.Commands["set"] = commander.Commands["var"]
+	commander.Commands["go"] = commander.Commands["navigate"]
 
 	switch flag.NArg() {
-	case 1: // program name only
+	case 0: // program name only
 		break
 
-	case 2: // one arg - expect URL or @filename
+	case 1: // one arg - expect URL or @filename
 		cmd := flag.Arg(0)
 		if !strings.HasPrefix(cmd, "@") {
 			cmd = "base " + cmd

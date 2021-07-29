@@ -1047,13 +1047,11 @@ func (remote *RemoteDebugger) SetCookie(cookie Cookie) bool {
 		params["expires"] = cookie.Expires
 	}
 
-	res, err := remote.SendRequest("Network.setCookies", params)
+	_, err := remote.SendRequest("Network.setCookies", params)
 	if err != nil {
 		return false
 	}
 
-	// this has been deprecated/removed
-	//return res["success"].(bool)
 	return true
 }
 

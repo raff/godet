@@ -1052,7 +1052,9 @@ func (remote *RemoteDebugger) SetCookie(cookie Cookie) bool {
 		return false
 	}
 
-	return res["success"].(bool)
+	// this has been deprecated/removed
+	//return res["success"].(bool)
+	return true
 }
 
 type ResourceType string

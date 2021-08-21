@@ -438,7 +438,7 @@ func main() {
 		})
 	}
 
-	if *pause > 0 {
+	if *pause > 0 && shouldWait {
 		pwait = make(chan bool)
 
 		remote.SetVirtualTimePolicy(godet.VirtualTimePolicyPauseIfNetworkFetchesPending,

@@ -671,6 +671,8 @@ func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
 }
 
 // GetDomains lists the available DevTools domains.
+//
+// Deprecated: The Schema domain is now deprecated.
 func (remote *RemoteDebugger) GetDomains() ([]Domain, error) {
 	res, err := remote.sendRawReplyRequest("Schema.getDomains", nil)
 	if err != nil {
@@ -1014,12 +1016,36 @@ func (remote *RemoteDebugger) GetAllCookies() ([]Cookie, error) {
 	return cookies.Cookies, nil
 }
 
-//Set browser cookies
+// Set browser cookies.
 func (remote *RemoteDebugger) SetCookies(cookies []Cookie) error {
 	params := Params{}
 	params["cookies"] = cookies
 
 	_, err := remote.SendRequest("Network.setCookies", params)
+	return err
+}
+
+// Deletes browser cookies with matching name and url or domain/path pair.
+//
+// Parameters:
+//
+// name string: Name of the cookies to remove.
+// url string: If specified, deletes all the cookies with the given name where domain and path match provided URL.
+// domain string: If specified, deletes only cookies with the exact domain.
+// path string: If specified, deletes only cookies with the exact path.
+func (remote *RemoteDebugger) DeleteCookies(name, url, domain, path string) error {
+	params := Params{}
+	params["name"] = name
+	if url != "" {
+		params["url"] = url
+	}
+	if domain != "" {
+		params["domain"] = domain
+	}
+	if path != "" {
+		params["path"] = path
+	}
+	_, err := remote.SendRequest("Network.deleteCookies", params)
 	return err
 }
 
@@ -1101,6 +1127,8 @@ type FetchRequestPattern struct {
 
 // SetRequestInterception sets the requests to intercept that match the provided patterns
 // and optionally resource types.
+//
+// Deprecated: use EnableRequestPaused instead.
 func (remote *RemoteDebugger) SetRequestInterception(patterns ...RequestPattern) error {
 	_, err := remote.SendRequest("Network.setRequestInterception", Params{
 		"patterns": patterns,
@@ -1131,6 +1159,8 @@ func (remote *RemoteDebugger) EnableRequestInterception(enabled bool) error {
 //  method string - if set this allows the request method to be overridden.
 //  postData string - if set this allows postData to be set.
 //  headers Headers - if set this allows the request headers to be changed.
+//
+// Deprecated: use ContinueRequest, FulfillRequest and FailRequest instead.
 func (remote *RemoteDebugger) ContinueInterceptedRequest(interceptionID string,
 	errorReason ErrorReason,
 	rawResponse string,
@@ -1387,6 +1417,8 @@ func (remote *RemoteDebugger) GetComputedStyleForNode(nodeID int) (map[string]in
 // SetVisibleSize resizes the frame/viewport of the page.
 // Note that this does not affect the frame's container (e.g. browser window).
 // Can be used to produce screenshots of the specified size.
+//
+// Deprecated: Emulation.setVisibleSize is now deprecated.
 func (remote *RemoteDebugger) SetVisibleSize(width, height int) error {
 	_, err := remote.SendRequest("Emulation.setVisibleSize", Params{
 		"width":  float64(width),

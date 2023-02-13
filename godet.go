@@ -4,6 +4,7 @@
 package godet
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -17,7 +18,8 @@ import (
 	"time"
 
 	"github.com/gobs/httpclient"
-	"github.com/gorilla/websocket"
+	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/wsjson"
 )
 
 const (
@@ -81,8 +83,8 @@ var (
 	// ErrorClose is returned if a method is called after the connection has been close
 	ErrorClose = errors.New("closed")
 
-	MaxReadBufferSize  = 0          // default gorilla/websocket buffer size
-	MaxWriteBufferSize = 100 * 1024 // this should be large enough to send large scripts
+	MaxReadBufferSize  int64 = 100 * 1024
+	MaxWriteBufferSize int64 = 100 * 1024 // this should be large enough to send large scripts
 )
 
 // NavigationResponse defines the type for ProcessNavigation `response`
@@ -327,7 +329,7 @@ func (remote *RemoteDebugger) connectWs(tab *Tab) error {
 		remote.ws, remote.current = nil, ""
 		remote.Unlock()
 
-		_ = ws.Close()
+		_ = ws.Close(websocket.StatusNormalClosure, "")
 	}
 
 	if len(tab.WsURL) == 0 {
@@ -339,18 +341,17 @@ func (remote *RemoteDebugger) connectWs(tab *Tab) error {
 		log.Println("connecting to tab", tab.WsURL)
 	}
 
-	d := &websocket.Dialer{
-		ReadBufferSize:  MaxReadBufferSize,
-		WriteBufferSize: MaxWriteBufferSize,
-	}
+	ctx := context.Background()
 
-	ws, _, err := d.Dial(tab.WsURL, nil)
+	ws, _, err := websocket.Dial(ctx, tab.WsURL, nil)
 	if err != nil {
 		if remote.verbose {
 			log.Println("dial error:", err)
 		}
 		return err
 	}
+
+	ws.SetReadLimit(MaxReadBufferSize)
 
 	remote.Lock()
 	remote.ws = ws
@@ -378,7 +379,7 @@ func (remote *RemoteDebugger) Close() (err error) {
 	if ws != nil { // already closed
 		close(remote.requests)
 		close(remote.closed)
-		err = ws.Close()
+		err = ws.Close(websocket.StatusNormalClosure, "")
 	}
 
 	if remote.verbose {
@@ -450,7 +451,7 @@ func (remote *RemoteDebugger) sendMessages() {
 			log.Printf("SEND %#v\n", message)
 		}
 
-		err := ws.WriteJSON(message)
+		err := wsjson.Write(context.Background(), ws, message)
 		if err != nil {
 			log.Println("write message:", err)
 		}
@@ -458,8 +459,10 @@ func (remote *RemoteDebugger) sendMessages() {
 }
 
 func permanentError(err error) bool {
-	if websocket.IsUnexpectedCloseError(err) {
-		log.Println("unexpected close error")
+	log.Printf("check permanent %v", websocket.CloseStatus(err))
+
+	if websocket.CloseStatus(err) != -1 {
+		log.Println("unexpected close error: ", err.Error())
 		return true
 	}
 
@@ -488,7 +491,7 @@ loop:
 
 			var message wsMessage
 
-			err := ws.ReadJSON(&message)
+			err := wsjson.Read(context.Background(), ws, &message)
 			if err != nil {
 				if remote.socket() != ws { // this socket is now closed
 					continue // one more check for remote.closed
@@ -1049,7 +1052,7 @@ func (remote *RemoteDebugger) DeleteCookies(name, url, domain, path string) erro
 	return err
 }
 
-//Set browser cookie
+// Set browser cookie
 func (remote *RemoteDebugger) SetCookie(cookie Cookie) bool {
 	params := Params{}
 	params["name"] = cookie.Name
@@ -1153,12 +1156,13 @@ func (remote *RemoteDebugger) EnableRequestInterception(enabled bool) error {
 // event will be sent with the same InterceptionId.
 //
 // Parameters:
-//  errorReason ErrorReason - if set this causes the request to fail with the given reason.
-//  rawResponse string - if set the requests completes using with the provided base64 encoded raw response, including HTTP status line and headers etc...
-//  url string - if set the request url will be modified in a way that's not observable by page.
-//  method string - if set this allows the request method to be overridden.
-//  postData string - if set this allows postData to be set.
-//  headers Headers - if set this allows the request headers to be changed.
+//
+//	errorReason ErrorReason - if set this causes the request to fail with the given reason.
+//	rawResponse string - if set the requests completes using with the provided base64 encoded raw response, including HTTP status line and headers etc...
+//	url string - if set the request url will be modified in a way that's not observable by page.
+//	method string - if set this allows the request method to be overridden.
+//	postData string - if set this allows postData to be set.
+//	headers Headers - if set this allows the request headers to be changed.
 //
 // Deprecated: use ContinueRequest, FulfillRequest and FailRequest instead.
 func (remote *RemoteDebugger) ContinueInterceptedRequest(interceptionID string,
@@ -1223,10 +1227,11 @@ func (remote *RemoteDebugger) EnableRequestPaused(enable bool, patterns ...Fetch
 // or completes it with the provided response bytes.
 //
 // Parameters:
-//  url string - if set the request url will be modified in a way that's not observable by page.
-//  method string - if set this allows the request method to be overridden.
-//  postData string - if set this allows postData to be set.
-//  headers Headers - if set this allows the request headers to be changed.
+//
+//	url string - if set the request url will be modified in a way that's not observable by page.
+//	method string - if set this allows the request method to be overridden.
+//	postData string - if set this allows postData to be set.
+//	headers Headers - if set this allows the request headers to be changed.
 func (remote *RemoteDebugger) ContinueRequest(requestID string,
 	url string,
 	method string,

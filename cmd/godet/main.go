@@ -123,7 +123,7 @@ func main() {
 	getAllCookies := flag.Bool("all-cookies", false, "get all cookies for current page")
 	body := flag.Bool("body", false, "show response body")
 	bypass := flag.Bool("bypass", false, "bypass service workers")
-	download := flag.String("download", "", "download behavour (default,allow,deny)")
+	download := flag.String("download", "", "download behavour (default,allow,allowAndName,deny)")
 	flag.Parse()
 
 	if *cmd != "" {

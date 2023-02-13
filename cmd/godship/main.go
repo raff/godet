@@ -206,7 +206,7 @@ func main() {
 			break
 		}
 
-		fmt.Println("connect", err)
+		fmt.Println("connect error:", err)
 	}
 
 	if err != nil {
@@ -256,6 +256,8 @@ func main() {
 		EnableShell: true,
 		Interrupt:   func(sig os.Signal) bool { interrupted = true; return false },
 	}
+
+        _ = interrupted
 
 	commander.Init(controlflow.Plugin, json.Plugin)
 	commander.SetVar("print", true)
@@ -421,6 +423,27 @@ func main() {
 				}
 			}
 
+			return
+		},
+		nil})
+
+	commander.Add(cmd.Command{
+		"cookies",
+		"cookies [urls...]",
+		func(line string) (stop bool) {
+                        var urls []string
+
+                        if line != "" {
+                            urls = strings.Fields(line)
+                        }
+
+                        cookies, err := remote.GetCookies(urls)
+                        if err != nil {
+                                fmt.Println("error getting cookies:", err)
+                                return
+                        }
+
+                        setResult(cookies)
 			return
 		},
 		nil})

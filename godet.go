@@ -1849,6 +1849,30 @@ func (remote *RemoteDebugger) LogEvents(enable bool) error {
 	return remote.DomainEvents("Log", enable)
 }
 
+// DebuggerEvents enables DebugLog events listening.
+func (remote *RemoteDebugger) DebuggerEvents(enable bool) error {
+	return remote.DomainEvents("Debugger", enable)
+}
+
+func (remote *RemoteDebugger) DebuggerPause() error {
+	_, err := remote.SendRequest("Debugger.pause", nil)
+	return err
+}
+
+func (remote *RemoteDebugger) DebuggerResume(terminateOnResume bool) error {
+	_, err := remote.SendRequest("Debugger.resume", Params{
+		"terminateOnResume": terminateOnResume,
+	})
+	return err
+}
+
+func (remote *RemoteDebugger) DebuggerSkipAllPauses(skip bool) error {
+	_, err := remote.SendRequest("Debugger.setSkipAllPauses", Params{
+		"skip": skip,
+	})
+	return err
+}
+
 // ProfilerEvents enables Profiler events listening.
 func (remote *RemoteDebugger) ProfilerEvents(enable bool) error {
 	return remote.DomainEvents("Profiler", enable)

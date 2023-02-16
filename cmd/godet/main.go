@@ -95,7 +95,7 @@ func main() {
 	version := flag.Bool("version", false, "display remote devtools version")
 	protocol := flag.Bool("protocol", false, "display the DevTools protocol")
 	listtabs := flag.Bool("tabs", false, "show list of open tabs")
-	seltab := flag.Int("tab", 0, "select specified tab if available")
+	seltab := flag.Int("tab", -1, "select specified tab if available")
 	newtab := flag.Bool("new", false, "always open a new tab")
 	history := flag.Bool("history", false, "display page history")
 	filter := flag.String("filter", "page", "filter tab list")
@@ -315,28 +315,26 @@ func main() {
 
 	var site string
 
+	tabs, err := remote.TabList("page")
+	if err != nil {
+		log.Fatal("cannot get tabs: ", err)
+	}
+	if *seltab >= 0 && *seltab < len(tabs) {
+		if err = remote.ActivateTab(tabs[*seltab]); err != nil {
+			log.Println("cannot select tab", *seltab)
+		}
+	}
+
 	if flag.NArg() > 0 {
 		site = flag.Arg(0)
-
-		tabs, err := remote.TabList("page")
-		if err != nil {
-			log.Fatal("cannot get tabs: ", err)
-		}
 
 		if len(tabs) == 0 || *newtab {
 			_, err = remote.NewTab(site)
 			site = ""
-		} else {
-			tab := *seltab
-			if tab > len(tabs) {
-				tab = 0
+
+			if err != nil {
+				log.Fatal("error loading page: ", err)
 			}
-
-			err = remote.ActivateTab(tabs[tab])
-		}
-
-		if err != nil {
-			log.Fatal("error loading page: ", err)
 		}
 	}
 

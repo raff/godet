@@ -212,6 +212,7 @@ type RemoteDebugger struct {
 	requests  chan Params
 	responses map[int]chan json.RawMessage
 	callbacks map[string]EventCallback
+	domains   map[string]bool
 	events    chan wsMessage
 }
 
@@ -270,6 +271,7 @@ func Connect(port string, verbose bool, options ...ConnectOption) (*RemoteDebugg
 		requests:  make(chan Params),
 		responses: map[int]chan json.RawMessage{},
 		callbacks: map[string]EventCallback{},
+		domains:   map[string]bool{},
 		events:    make(chan wsMessage, 256),
 		closed:    make(chan bool),
 		verbose:   verbose,
@@ -634,6 +636,12 @@ func (remote *RemoteDebugger) ActivateTab(tab *Tab) error {
 
 	if err == nil {
 		err = remote.connectWs(tab)
+
+		if err == nil {
+			for domain, state := range remote.domains {
+				remote.DomainEvents(domain, state)
+			}
+		}
 	}
 
 	return err
@@ -1049,7 +1057,7 @@ func (remote *RemoteDebugger) DeleteCookies(name, url, domain, path string) erro
 	return err
 }
 
-//Set browser cookie
+// Set browser cookie
 func (remote *RemoteDebugger) SetCookie(cookie Cookie) bool {
 	params := Params{}
 	params["name"] = cookie.Name
@@ -1153,12 +1161,13 @@ func (remote *RemoteDebugger) EnableRequestInterception(enabled bool) error {
 // event will be sent with the same InterceptionId.
 //
 // Parameters:
-//  errorReason ErrorReason - if set this causes the request to fail with the given reason.
-//  rawResponse string - if set the requests completes using with the provided base64 encoded raw response, including HTTP status line and headers etc...
-//  url string - if set the request url will be modified in a way that's not observable by page.
-//  method string - if set this allows the request method to be overridden.
-//  postData string - if set this allows postData to be set.
-//  headers Headers - if set this allows the request headers to be changed.
+//
+//	errorReason ErrorReason - if set this causes the request to fail with the given reason.
+//	rawResponse string - if set the requests completes using with the provided base64 encoded raw response, including HTTP status line and headers etc...
+//	url string - if set the request url will be modified in a way that's not observable by page.
+//	method string - if set this allows the request method to be overridden.
+//	postData string - if set this allows postData to be set.
+//	headers Headers - if set this allows the request headers to be changed.
 //
 // Deprecated: use ContinueRequest, FulfillRequest and FailRequest instead.
 func (remote *RemoteDebugger) ContinueInterceptedRequest(interceptionID string,
@@ -1223,10 +1232,11 @@ func (remote *RemoteDebugger) EnableRequestPaused(enable bool, patterns ...Fetch
 // or completes it with the provided response bytes.
 //
 // Parameters:
-//  url string - if set the request url will be modified in a way that's not observable by page.
-//  method string - if set this allows the request method to be overridden.
-//  postData string - if set this allows postData to be set.
-//  headers Headers - if set this allows the request headers to be changed.
+//
+//	url string - if set the request url will be modified in a way that's not observable by page.
+//	method string - if set this allows the request method to be overridden.
+//	postData string - if set this allows postData to be set.
+//	headers Headers - if set this allows the request headers to be changed.
 func (remote *RemoteDebugger) ContinueRequest(requestID string,
 	url string,
 	method string,
@@ -1782,7 +1792,7 @@ func (remote *RemoteDebugger) GetPreciseCoverage(precise bool) ([]interface{}, e
 	if res == nil || err != nil {
 		return nil, err
 	}
-	log.Println(res)
+	//log.Println(res)
 	return res["result"].([]interface{}), nil
 }
 
@@ -1799,8 +1809,10 @@ func (remote *RemoteDebugger) DomainEvents(domain string, enable bool) error {
 	method := domain
 
 	if enable {
+		remote.domains[method] = true
 		method += ".enable"
 	} else {
+		delete(remote.domains, method)
 		method += ".disable"
 	}
 
@@ -1837,6 +1849,52 @@ func (remote *RemoteDebugger) PageEvents(enable bool) error {
 // NetworkEvents enables Network events listening.
 func (remote *RemoteDebugger) NetworkEvents(enable bool) error {
 	return remote.DomainEvents("Network", enable)
+}
+
+// TargetEvents enables Target events listening.
+func (remote *RemoteDebugger) TargetEvents(enable bool) error {
+	return remote.DomainEvents("Target", enable)
+}
+
+// Retrieves a list of available targets.
+func (remote *RemoteDebugger) GetTargets() (map[string]interface{}, error) {
+	resp, err := remote.SendRequest("Target.getTargets", Params{})
+
+	return resp, err
+}
+
+// Controls whether to discover available targets and notify via
+// `targetCreated/targetInfoChanged/targetDestroyed` events."
+func (remote *RemoteDebugger) SetDiscoverTargets(discover bool) error {
+	_, err := remote.SendRequest("Target.setDiscoverTargets", Params{
+		"discover": discover,
+	})
+	return err
+}
+
+// Controls whether to automatically attach to new targets which are considered to be related to
+// this one. When turned on, attaches to all existing related targets as well. When turned off,
+// automatically detaches from all currently attached targets.
+// This also clears all targets added by `autoAttachRelated` from the list of targets to watch
+// for creation of related targets.",
+func (remote *RemoteDebugger) SetAutoAttach(autoAttach bool) error {
+	_, err := remote.SendRequest("Target.setAutoAttach", Params{
+		"autoAttach": autoAttach,
+	})
+	return err
+}
+
+// Attaches to the target with given id.
+func (remote *RemoteDebugger) AttachToTarget(targetId string) (string, error) {
+	res, err := remote.SendRequest("Target.attachToTarget", Params{
+		"targetId": targetId,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return res["sessionId"].(string), nil
 }
 
 // RuntimeEvents enables Runtime events listening.

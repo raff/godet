@@ -97,6 +97,7 @@ func main() {
 	listtabs := flag.Bool("tabs", false, "show list of open tabs")
 	seltab := flag.Int("tab", -1, "select specified tab if available")
 	newtab := flag.Bool("new", false, "always open a new tab")
+	listtargets := flag.Bool("targets", false, "show list of targets")
 	history := flag.Bool("history", false, "display page history")
 	filter := flag.String("filter", "page", "filter tab list")
 	domains := flag.Bool("domains", false, "show list of available domains")
@@ -139,9 +140,9 @@ func main() {
 	var remote *godet.RemoteDebugger
 	var err error
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 20; i++ {
 		if i > 0 {
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(time.Second)
 		}
 
 		remote, err = godet.Connect(*port, *verbose)
@@ -191,6 +192,16 @@ func main() {
 		}
 
 		pretty.PrettyPrint(tabs)
+		shouldWait = false
+	}
+
+	if *listtargets {
+		targets, err := remote.GetTargets()
+		if err != nil {
+			log.Fatal("cannot get list of targets: ", err)
+		}
+
+		pretty.PrettyPrint(targets)
 		shouldWait = false
 	}
 
@@ -351,6 +362,7 @@ func main() {
 		remote.LogEvents(true)
 		remote.EmulationEvents(true)
 		remote.ServiceWorkerEvents(true)
+		//remote.TargetEvents(true)
 	}
 
 	if *download != "" {

@@ -89,7 +89,7 @@ func main() {
 	}
 
 	cmd := flag.String("cmd", chromeapp, "command to execute to start the browser")
-	headless := flag.Bool("headless", true, "headless mode")
+	headless := flag.String("headless", "", "headless mode (true/false, old or new)")
 	port := flag.String("port", "localhost:9222", "Chrome remote debugger port")
 	verbose := flag.Bool("verbose", false, "verbose logging")
 	version := flag.Bool("version", false, "display remote devtools version")
@@ -128,8 +128,13 @@ func main() {
 	flag.Parse()
 
 	if *cmd != "" {
-		if !*headless {
-			*cmd = strings.Replace(*cmd, " --headless ", " ", -1)
+		if *headless != "" {
+			hparam := fmt.Sprintf(" --headless=%v ", *headless)
+			if *headless == "false" {
+				hparam = " "
+			}
+
+			*cmd = strings.Replace(*cmd, " --headless ", hparam, -1)
 		}
 
 		if err := runCommand(*cmd); err != nil {

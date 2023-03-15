@@ -661,7 +661,7 @@ func (remote *RemoteDebugger) NewTab(url string) (*Tab, error) {
 		path += "?" + url
 	}
 
-	resp, err := responseError(remote.http.Do(remote.http.Request("GET", path, nil, nil)))
+	resp, err := responseError(remote.http.Do(remote.http.Request("PUT", path, nil, nil)))
 	if err != nil {
 		return nil, err
 	}

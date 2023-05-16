@@ -19,7 +19,9 @@ import (
 
 func runCommand(commandString string) error {
 	parts := args.GetArgs(commandString)
-	cmd := exec.Command(parts[0], parts[1:]...)
+	exe := strings.Replace(parts[0], "\u00A0", " ", -1)
+
+	cmd := exec.Command(exe, parts[1:]...)
 	return cmd.Start()
 }
 
@@ -75,6 +77,19 @@ func main() {
 			}
 
 		case "windows":
+			for _, c := range []string{
+				"C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+				"C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+			} {
+				if _, err := exec.LookPath(c); err == nil {
+					if strings.Contains(c, " ") {
+						chromeapp = `"` + strings.Replace(c, " ", "\u00A0", -1) + `"`
+					} else {
+						chromeapp = c
+					}
+					break
+				}
+			}
 		}
 	}
 

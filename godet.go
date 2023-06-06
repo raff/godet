@@ -1931,6 +1931,47 @@ func (remote *RemoteDebugger) DebuggerSkipAllPauses(skip bool) error {
 	return err
 }
 
+func (remote *RemoteDebugger) GetScriptSource(id string) (string, error) {
+	res, err := remote.SendRequest("Debugger.getScriptSource", Params{
+		"scriptId": id,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	// should check for bytecode (wasm)
+	ss := res["scriptSource"]
+	if ss == nil {
+		return "", nil
+	}
+
+	return ss.(string), nil
+}
+
+func (remote *RemoteDebugger) SetScriptSource(id, source string) error {
+	res, err := remote.SendRequest("Debugger.setScriptSource", Params{
+		"scriptId":     id,
+		"scriptSource": source,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if res == nil {
+		//log.Println("SetScriptSource: NO RESPONSE")
+		return nil
+	}
+
+	status := res["status"].(string)
+	if status == "Ok" {
+		return nil
+	}
+
+	return errors.New(status)
+}
+
 // ProfilerEvents enables Profiler events listening.
 func (remote *RemoteDebugger) ProfilerEvents(enable bool) error {
 	return remote.DomainEvents("Profiler", enable)

@@ -1276,16 +1276,25 @@ func (remote *RemoteDebugger) FailRequest(requestID string, errorReason ErrorRea
 // FulfillRequest provides a response to the request.
 func (remote *RemoteDebugger) FulfillRequest(requestID string, responseCode int, responsePhrase string, headers map[string]string, body []byte) error {
 	params := Params{
-		"requestId":       requestID,
-		"responseCode":    responseCode,
-		"responseHeaders": headers,
+		"requestId":    requestID,
+		"responseCode": responseCode,
 	}
 
 	if responsePhrase != "" {
 		params["responsePhrase"] = responsePhrase
 	}
 
-	if body != nil {
+	if len(headers) > 0 {
+		var hlist = []map[string]string{}
+
+		for k, v := range headers {
+			hlist = append(hlist, map[string]string{"name": k, "value": v})
+		}
+
+		params["responseHeaders"] = hlist
+	}
+
+	if len(body) > 0 {
 		params["body"] = body
 	}
 
@@ -1927,6 +1936,13 @@ func (remote *RemoteDebugger) DebuggerResume(terminateOnResume bool) error {
 func (remote *RemoteDebugger) DebuggerSkipAllPauses(skip bool) error {
 	_, err := remote.SendRequest("Debugger.setSkipAllPauses", Params{
 		"skip": skip,
+	})
+	return err
+}
+
+func (remote *RemoteDebugger) DebuggerSetBreakpointsActive(active bool) error {
+	_, err := remote.SendRequest("Debugger.setBreakpointsActive", Params{
+		"active": active,
 	})
 	return err
 }

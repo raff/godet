@@ -1,5 +1,9 @@
 name: Go
 on: [push]
+
+env:
+  GO111MODULE: auto
+
 jobs:
 
   build:

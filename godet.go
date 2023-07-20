@@ -701,9 +701,42 @@ func (remote *RemoteDebugger) GetDomains() ([]Domain, error) {
 
 // Navigate navigates to the specified URL.
 func (remote *RemoteDebugger) Navigate(url string) (string, error) {
-	res, err := remote.SendRequest("Page.navigate", Params{
+	return remote.NavigateTransition(url, NoTransition)
+}
+
+type TransitionType string
+
+const (
+	NoTransition = TransitionType("")
+	Reload       = TransitionType("reload")
+
+/*
+"link",
+"typed",
+"address_bar",
+"auto_bookmark",
+"auto_subframe",
+"manual_subframe",
+"generated",
+"auto_toplevel",
+"form_submit",
+"reload",
+"keyword",
+"keyword_generated",
+"other"
+*/
+)
+
+func (remote *RemoteDebugger) NavigateTransition(url string, trans TransitionType) (string, error) {
+	params := Params{
 		"url": url,
-	})
+	}
+
+	if trans != NoTransition {
+		params["transitionType"] = string(trans)
+	}
+
+	res, err := remote.SendRequest("Page.navigate", params)
 	if err != nil {
 		return "", err
 	}

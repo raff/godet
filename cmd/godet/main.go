@@ -100,7 +100,8 @@ func main() {
 			chromeapp += " --headless"
 		}
 
-		chromeapp += " --remote-debugging-port=9222 --hide-scrollbars --bwsi --disable-extensions --disable-gpu about:blank"
+		temp := os.TempDir()
+		chromeapp += " --remote-debugging-port=9222 --user-data-dir=" + temp + " --hide-scrollbars --bwsi --disable-extensions --disable-gpu about:blank"
 	}
 
 	cmd := flag.String("cmd", chromeapp, "command to execute to start the browser")

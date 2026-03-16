@@ -54,7 +54,8 @@ func main() {
 	_ = remote.SetBlockedURLs("*.jpg", "*.png", "*.gif")
 
 	// create new tab
-	tab, _ := remote.NewTab("https://www.google.com")
+	tab, _ := remote.NewTab("https://www.example.com/")
+	_ = remote.ActivateTab(tab)
 	fmt.Println(tab)
 
 	// enable event processing
@@ -64,8 +65,13 @@ func main() {
 	remote.DOMEvents(true)
 	remote.LogEvents(true)
 
+	time.Sleep(2 * time.Second)
+
 	// navigate in existing tab
 	_ = remote.ActivateTab(tabs[0])
+
+	// close tab
+	_ = remote.CloseTab(tab)
 
 	//remote.StartPreciseCoverage(true, true)
 

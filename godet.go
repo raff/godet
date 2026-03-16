@@ -1,6 +1,30 @@
 // Package godet implements a client to interact with an instance of Chrome via the Remote Debugging Protocol.
 //
-// See https://developer.chrome.com/devtools/docs/debugger-protocol
+// The package provides a high-level interface to Chrome DevTools Protocol, allowing you to:
+// - Control Chrome/Chromium browser programmatically
+// - Automate web page interactions
+// - Capture screenshots and PDF files
+// - Monitor network traffic
+// - Debug JavaScript
+// - Profile page performance
+// - And more...
+//
+// Basic usage:
+//
+//	debugger, err := godet.Connect("localhost:9222", true)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer debugger.Close()
+//
+//	// Navigate to a page
+//	debugger.Navigate("https://example.com")
+//
+//	// Take a screenshot
+//	debugger.SaveScreenshot("screenshot.png", 0644, 100, false)
+//
+// For more examples and detailed documentation, see:
+// https://developer.chrome.com/devtools/docs/debugger-protocol
 package godet
 
 import (
@@ -121,65 +145,89 @@ func responseError(resp *httpclient.HttpResponse, err error) (*httpclient.HttpRe
 	return resp, err
 }
 
+// Cookie represents a browser cookie with all its attributes.
+// This structure matches the Cookie object in the Chrome DevTools Protocol.
+type Cookie struct {
+	Name     string  `json:"name"`     // Cookie name
+	Value    string  `json:"value"`    // Cookie value
+	Domain   string  `json:"domain"`   // Cookie domain
+	Path     string  `json:"path"`     // Cookie path
+	Size     int     `json:"size"`     // Size in bytes
+	Expires  float64 `json:"expires"`  // Unix time in seconds
+	HttpOnly bool    `json:"httpOnly"` // HttpOnly flag
+	Secure   bool    `json:"secure"`   // Secure flag
+	Session  bool    `json:"session"`  // Session cookie flag
+	SameSite string  `json:"sameSite"` // SameSite policy
+}
+
 // Version holds the DevTools version information.
+// This structure is returned by the Version() method.
 type Version struct {
-	Browser         string `json:"Browser"`
-	ProtocolVersion string `json:"Protocol-Version"`
-	UserAgent       string `json:"User-Agent"`
-	V8Version       string `json:"V8-Version"`
-	WebKitVersion   string `json:"WebKit-Version"`
+	Browser         string `json:"Browser"`          // Browser name and version
+	ProtocolVersion string `json:"Protocol-Version"` // DevTools protocol version
+	UserAgent       string `json:"User-Agent"`       // Browser's user agent
+	V8Version       string `json:"V8-Version"`       // V8 engine version
+	WebKitVersion   string `json:"WebKit-Version"`   // WebKit version
 }
 
 // Domain holds a domain name and version.
+// A domain represents a group of related DevTools commands and events.
 type Domain struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Name    string `json:"name"`    // Domain name
+	Version string `json:"version"` // Domain version
 }
 
-// Tab represents an opened tab/page.
+// Tab represents an opened tab/page in the browser.
+// Each tab can be controlled independently through the DevTools protocol.
 type Tab struct {
-	ID          string `json:"id"`
-	Type        string `json:"type"`
-	Description string `json:"description"`
-	Title       string `json:"title"`
-	URL         string `json:"url"`
-	WsURL       string `json:"webSocketDebuggerUrl"`
-	DevURL      string `json:"devtoolsFrontendUrl"`
+	ID          string `json:"id"`                   // Unique tab identifier
+	Type        string `json:"type"`                 // Tab type (e.g., "page")
+	Description string `json:"description"`          // Tab description
+	Title       string `json:"title"`                // Page title
+	URL         string `json:"url"`                  // Page URL
+	WsURL       string `json:"webSocketDebuggerUrl"` // WebSocket URL for this tab
+	DevURL      string `json:"devtoolsFrontendUrl"`  // DevTools frontend URL
 }
 
-// NavigationEntry represent a navigation history entry.
+// NavigationEntry represents a navigation history entry.
+// These entries make up the browser's navigation history for a tab.
 type NavigationEntry struct {
-	ID    int64  `json:"id"`
-	URL   string `json:"url"`
-	Title string `json:"title"`
+	ID    int64  `json:"id"`    // Unique entry identifier
+	URL   string `json:"url"`   // Page URL
+	Title string `json:"title"` // Page title
 }
 
-// Profile represents a profile data structure.
+// Profile represents a JavaScript CPU profile.
+// This structure contains detailed information about JavaScript execution.
 type Profile struct {
-	Nodes      []ProfileNode `json:"nodes"`
-	StartTime  int64         `json:"startTime"`
-	EndTime    int64         `json:"endTime"`
-	Samples    []int64       `json:"samples"`
-	TimeDeltas []int64       `json:"timeDeltas"`
+	Nodes      []ProfileNode `json:"nodes"`      // Function call nodes
+	StartTime  int64         `json:"startTime"`  // Profile start timestamp (microseconds)
+	EndTime    int64         `json:"endTime"`    // Profile end timestamp (microseconds)
+	Samples    []int64       `json:"samples"`    // Thread samples
+	TimeDeltas []int64       `json:"timeDeltas"` // Time intervals between samples
 }
 
-// ProfileNode represents a profile node data structure.
-// The experimental fields are kept as json.RawMessage, so you may decode them with your own code, see: https://chromedevtools.github.io/debugger-protocol-viewer/tot/Profiler/
+// ProfileNode represents a node in the JavaScript CPU profile tree.
+// Each node typically represents a function call in the program.
+// The experimental fields are kept as json.RawMessage, so you may decode them with your own code.
+// See: https://chromedevtools.github.io/debugger-protocol-viewer/tot/Profiler/
 type ProfileNode struct {
-	ID            int64           `json:"id"`
-	CallFrame     json.RawMessage `json:"callFrame"`
-	HitCount      int64           `json:"hitCount"`
-	Children      []int64         `json:"children"`
-	DeoptReason   string          `json:"deoptReason"`
-	PositionTicks json.RawMessage `json:"positionTicks"`
+	ID            int64           `json:"id"`            // Unique node identifier
+	CallFrame     json.RawMessage `json:"callFrame"`     // Function call frame
+	HitCount      int64           `json:"hitCount"`      // Number of samples where this node was on top
+	Children      []int64         `json:"children"`      // Child node IDs
+	DeoptReason   string          `json:"deoptReason"`   // Deoptimization reason
+	PositionTicks json.RawMessage `json:"positionTicks"` // Source positions where the function spent time
 }
 
-// EvaluateError is returned by Evaluate in case of expression errors.
+// EvaluateError is returned by Evaluate in case of JavaScript expression errors.
+// It provides detailed information about the error, including line and column numbers.
 type EvaluateError struct {
-	ErrorDetails     map[string]interface{}
-	ExceptionDetails map[string]interface{}
+	ErrorDetails     map[string]interface{} // Error details
+	ExceptionDetails map[string]interface{} // Exception details
 }
 
+// Error implements the error interface for EvaluateError.
 func (err EvaluateError) Error() string {
 	desc := err.ErrorDetails["description"].(string)
 	if excp := err.ExceptionDetails; excp != nil {
@@ -188,60 +236,55 @@ func (err EvaluateError) Error() string {
 				excp["lineNumber"].(float64), excp["columnNumber"].(float64))
 		}
 	}
-
 	return desc
 }
 
+// NavigationError represents an error that occurred during page navigation.
 type NavigationError string
 
+// Error implements the error interface for NavigationError.
 func (err NavigationError) Error() string {
 	return "NavigationError:" + string(err)
 }
 
-// RemoteDebugger implements an interface for Chrome DevTools.
-type RemoteDebugger struct {
-	http    *httpclient.HttpClient
-	ws      *websocket.Conn
-	current string
-	reqID   int
-	verbose bool
-
-	sync.Mutex
-	closed chan bool
-
-	requests  chan Params
-	responses map[int]chan json.RawMessage
-	callbacks map[string]EventCallback
-	domains   map[string]bool
-	events    chan wsMessage
-}
-
-// Params is a type alias for the event params structure.
+// Params is a type alias for the event parameters structure.
+// It provides convenient methods to access parameter values of different types.
 type Params map[string]interface{}
 
+// String returns the string value for the given key.
+// Returns an empty string if the key doesn't exist or the value is not a string.
 func (p Params) String(k string) string {
 	val, _ := p[k].(string)
 	return val
 }
 
+// Int returns the integer value for the given key.
+// Returns 0 if the key doesn't exist or the value cannot be converted to an integer.
 func (p Params) Int(k string) int {
 	val, _ := p[k].(float64)
 	return int(val)
 }
 
+// Bool returns the boolean value for the given key.
+// Returns false if the key doesn't exist or the value is not a boolean.
 func (p Params) Bool(k string) bool {
 	val, _ := p[k].(bool)
 	return val
 }
 
+// Map returns the map value for the given key.
+// Returns nil if the key doesn't exist or the value is not a map.
 func (p Params) Map(k string) map[string]interface{} {
 	val, _ := p[k].(map[string]interface{})
 	return val
 }
 
-// EventCallback represents a callback event, associated with a method.
+// EventCallback represents a callback function that handles DevTools protocol events.
+// The callback receives event parameters as a Params map.
 type EventCallback func(params Params)
 
+// ConnectOption represents a function that modifies the HTTP client configuration.
+// These options can be passed to the Connect function to customize the connection.
 type ConnectOption func(c *httpclient.HttpClient)
 
 // Host set the host header
@@ -258,7 +301,38 @@ func Headers(headers map[string]string) ConnectOption {
 	}
 }
 
+// RemoteDebugger implements an interface for Chrome DevTools Protocol.
+// It manages the connection to a Chrome instance and provides methods to control
+// and interact with the browser through the DevTools Protocol.
+type RemoteDebugger struct {
+	http    *httpclient.HttpClient // HTTP client for API requests
+	ws      *websocket.Conn        // WebSocket connection for interaction with the browser
+	current string                 // Current tab ID
+	reqID   int                    // Request ID counter
+	verbose bool                   // Verbose logging enabled
+
+	sync.Mutex           // Mutex for thread safety
+	closed     chan bool // Channel to signal connection closure
+
+	requests  chan Params                  // Channel for outgoing requests
+	responses map[int]chan json.RawMessage // Map of request IDs to response channels
+	callbacks map[string]EventCallback     // Map of event names to callback functions
+	domains   map[string]bool              // Map of enabled protocol domains
+	events    chan wsMessage               // Channel for incoming events
+}
+
 // Connect to the remote debugger and return `RemoteDebugger` object.
+// Connect establishes a connection to a Chrome instance's debugging port.
+// The port parameter should be in the format "host:port" (e.g. "localhost:9222").
+// If verbose is true, additional debug information will be logged.
+//
+// Example:
+//
+//	debugger, err := godet.Connect("localhost:9222", true)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer debugger.Close()
 func Connect(port string, verbose bool, options ...ConnectOption) (*RemoteDebugger, error) {
 	client := httpclient.NewHttpClient("http://" + port)
 
@@ -370,7 +444,8 @@ func (remote *RemoteDebugger) socket() (ws *websocket.Conn) {
 	return
 }
 
-// Close the RemoteDebugger connection.
+// Close terminates the connection to the Chrome instance.
+// After calling Close, no further method calls should be made on the RemoteDebugger.
 func (remote *RemoteDebugger) Close() (err error) {
 	remote.Lock()
 	ws := remote.ws
@@ -699,7 +774,15 @@ func (remote *RemoteDebugger) GetDomains() ([]Domain, error) {
 	return domains.Domains, nil
 }
 
-// Navigate navigates to the specified URL.
+// Navigate causes the browser to navigate to the specified URL.
+// Returns the frame ID that will be navigated.
+//
+// Example:
+//
+//	frameID, err := debugger.Navigate("https://example.com")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
 func (remote *RemoteDebugger) Navigate(url string) (string, error) {
 	return remote.NavigateTransition(url, NoTransition)
 }
@@ -800,7 +883,18 @@ func (remote *RemoteDebugger) ProcessNavigation(navigationID int, navigation Nav
 	return err
 }
 
-// CaptureScreenshot takes a screenshot, uses "png" as default format.
+// CaptureScreenshot takes a screenshot of the current page.
+// The format parameter can be "png" or "jpeg". If empty, "png" is used.
+// The quality parameter (0-100) is only used for JPEG format.
+// If fromSurface is true, the screenshot will be taken from the surface rather than the view.
+//
+// Example:
+//
+//	data, err := debugger.CaptureScreenshot("png", 100, false)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	ioutil.WriteFile("screenshot.png", data, 0644)
 func (remote *RemoteDebugger) CaptureScreenshot(format string, quality int, fromSurface bool) ([]byte, error) {
 	if format == "" {
 		format = "png"
@@ -823,7 +917,17 @@ func (remote *RemoteDebugger) CaptureScreenshot(format string, quality int, from
 	return base64.StdEncoding.DecodeString(res["data"].(string))
 }
 
-// SaveScreenshot takes a screenshot and saves it to a file.
+// SaveScreenshot takes a screenshot and saves it directly to a file.
+// The file format is determined by the filename extension (.png or .jpg).
+// The quality parameter (0-100) is only used for JPEG format.
+// If fromSurface is true, the screenshot will be taken from the surface rather than the view.
+//
+// Example:
+//
+//	err := debugger.SaveScreenshot("screenshot.png", 0644, 100, false)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
 func (remote *RemoteDebugger) SaveScreenshot(filename string, perm os.FileMode, quality int, fromSurface bool) error {
 	var format string
 	ext := filepath.Ext(filename)
@@ -957,6 +1061,18 @@ func (remote *RemoteDebugger) SetDownloadBehavior(behavior DownloadBehavior, dow
 }
 
 // GetResponseBody returns the response body of a given requestId (from the Network.responseReceived payload).
+// The response body can be base64 encoded if the response is binary.
+//
+// Example:
+//
+//	debugger.CallbackEvent("Network.responseReceived", func(params Params) {
+//	    reqID := params.String("requestId")
+//	    body, err := debugger.GetResponseBody(reqID)
+//	    if err != nil {
+//	        log.Fatal(err)
+//	    }
+//	    fmt.Printf("Response body: %s\n", body)
+//	})
 func (remote *RemoteDebugger) GetResponseBody(req string) ([]byte, error) {
 	res, err := remote.SendRequest("Network.getResponseBody", Params{
 		"requestId": req,
@@ -992,21 +1108,18 @@ func (remote *RemoteDebugger) GetResponseBodyForInterception(iid string) ([]byte
 	}
 }
 
-type Cookie struct {
-	Name     string  `json:"name"`
-	Value    string  `json:"value"`
-	Domain   string  `json:"domain"`
-	Path     string  `json:"path"`
-	Size     int     `json:"size"`
-	Expires  float64 `json:"expires"`
-	HttpOnly bool    `json:"httpOnly"`
-	Secure   bool    `json:"secure"`
-	Session  bool    `json:"session"`
-	SameSite string  `json:"sameSite"`
-}
-
-// GetCookies returns all browser cookies for the current URL.
-// Depending on the backend support, will return detailed cookie information in the `cookies` field.
+// GetCookies returns all browser cookies for the specified URLs.
+// If urls is nil, returns all cookies for all URLs.
+//
+// Example:
+//
+//	cookies, err := debugger.GetCookies([]string{"https://example.com"})
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	for _, cookie := range cookies {
+//	    fmt.Printf("Cookie: %s = %s\n", cookie.Name, cookie.Value)
+//	}
 func (remote *RemoteDebugger) GetCookies(urls []string) ([]Cookie, error) {
 	params := Params{}
 
@@ -1057,7 +1170,18 @@ func (remote *RemoteDebugger) GetAllCookies() ([]Cookie, error) {
 	return cookies.Cookies, nil
 }
 
-// Set browser cookies.
+// SetCookies sets browser cookies for the current page.
+//
+// Example:
+//
+//	err := debugger.SetCookies([]Cookie{
+//	    {
+//	        Name: "session",
+//	        Value: "abc123",
+//	        Domain: "example.com",
+//	        Path: "/",
+//	    },
+//	})
 func (remote *RemoteDebugger) SetCookies(cookies []Cookie) error {
 	params := Params{}
 	params["cookies"] = cookies
@@ -1169,6 +1293,14 @@ type FetchRequestPattern struct {
 // SetRequestInterception sets the requests to intercept that match the provided patterns
 // and optionally resource types.
 //
+// Example:
+//
+//	debugger.SetRequestInterception(RequestPattern{
+//	    UrlPattern: "*",
+//	    ResourceType: ResourceTypeDocument,
+//	    InterceptionStage: StageRequest,
+//	})
+//
 // Deprecated: use EnableRequestPaused instead.
 func (remote *RemoteDebugger) SetRequestInterception(patterns ...RequestPattern) error {
 	_, err := remote.SendRequest("Network.setRequestInterception", Params{
@@ -1177,7 +1309,16 @@ func (remote *RemoteDebugger) SetRequestInterception(patterns ...RequestPattern)
 	return err
 }
 
-// EnableRequestInterception enables interception, modification or cancellation of network requests
+// EnableRequestInterception enables interception, modification or cancellation of network requests.
+// When enabled, all requests will be paused and need to be handled via ContinueInterceptedRequest.
+//
+// Example:
+//
+//	debugger.EnableRequestInterception(true)
+//	debugger.CallbackEvent("Network.requestIntercepted", func(params Params) {
+//	    id := params.String("interceptionId")
+//	    debugger.ContinueInterceptedRequest(id, "", "", "", "", "", nil)
+//	})
 func (remote *RemoteDebugger) EnableRequestInterception(enabled bool) error {
 	if enabled {
 		return remote.SetRequestInterception(RequestPattern{UrlPattern: "*"})
@@ -1676,7 +1817,17 @@ func ThrowOnSideEffect(enable bool) EvaluateOption {
 	}
 }
 
-// Evaluate evalutes a Javascript function in the context of the current page.
+// Evaluate executes a JavaScript expression in the context of the current page.
+// The expression result is returned as an interface{}.
+// If the expression results in an error, an EvaluateError is returned.
+//
+// Example:
+//
+//	result, err := debugger.Evaluate("document.title")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Page title: %v\n", result)
 func (remote *RemoteDebugger) Evaluate(expr string, options ...EvaluateOption) (interface{}, error) {
 	params := Params{
 		"expression":    expr,
@@ -1713,7 +1864,13 @@ func (remote *RemoteDebugger) EvaluateWrap(expr string, options ...EvaluateOptio
 	return remote.Evaluate(expr, options...)
 }
 
-// SetBlockedURLs blocks URLs from loading (wildcards '*' are allowed)
+// SetBlockedURLs blocks URLs from loading (wildcards '*' are allowed).
+// This can be used to block specific resources or entire domains.
+//
+// Example:
+//
+//	// Block all tracking scripts
+//	debugger.SetBlockedURLs("*google-analytics.com*", "*doubleclick.net*")
 func (remote *RemoteDebugger) SetBlockedURLs(urls ...string) error {
 	_, err := remote.SendRequest("Network.setBlockedURLs", Params{
 		"urls": urls,
@@ -1722,6 +1879,11 @@ func (remote *RemoteDebugger) SetBlockedURLs(urls ...string) error {
 }
 
 // SetUserAgent overrides the default user agent.
+// This affects all subsequent network requests.
+//
+// Example:
+//
+//	debugger.SetUserAgent("Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)")
 func (remote *RemoteDebugger) SetUserAgent(userAgent string) error {
 	_, err := remote.SendRequest("Network.setUserAgentOverride", Params{
 		"userAgent": userAgent,
@@ -1753,7 +1915,13 @@ func (remote *RemoteDebugger) ClearBrowserCookies() error {
 	return err
 }
 
-// SetCacheDisabled toggles ignoring cache for each request. If `true`, cache will not be used.
+// SetCacheDisabled toggles ignoring cache for each request.
+// If true, cache will not be used and each request will be sent to the server.
+//
+// Example:
+//
+//	debugger.SetCacheDisabled(true) // Disable cache
+//	debugger.Navigate("https://example.com") // This will bypass cache
 func (remote *RemoteDebugger) SetCacheDisabled(disabled bool) error {
 	_, err := remote.SendRequest("Network.setCacheDisabled", Params{
 		"cacheDisabled": disabled,
@@ -1769,7 +1937,14 @@ func (remote *RemoteDebugger) SetBypassServiceWorker(bypass bool) error {
 	return err
 }
 
-// CallbackEvent sets a callback for the specified event.
+// CallbackEvent registers a callback function for a specific event type.
+// The callback will be invoked whenever an event of the specified type is received.
+//
+// Example:
+//
+//	debugger.CallbackEvent("Network.requestWillBeSent", func(params Params) {
+//	    fmt.Printf("Request to: %s\n", params.String("request.url"))
+//	})
 func (remote *RemoteDebugger) CallbackEvent(method string, cb EventCallback) {
 	remote.Lock()
 	remote.callbacks[method] = cb
@@ -1889,6 +2064,17 @@ func (remote *RemoteDebugger) PageEvents(enable bool) error {
 }
 
 // NetworkEvents enables Network events listening.
+// When enabled, you can receive events about network traffic, including:
+// - Network requests and responses
+// - WebSocket traffic
+// - Resource loading
+//
+// Example:
+//
+//	debugger.NetworkEvents(true)
+//	debugger.CallbackEvent("Network.requestWillBeSent", func(params Params) {
+//	    fmt.Printf("Request to: %s\n", params.String("request.url"))
+//	})
 func (remote *RemoteDebugger) NetworkEvents(enable bool) error {
 	return remote.DomainEvents("Network", enable)
 }
@@ -1949,7 +2135,18 @@ func (remote *RemoteDebugger) LogEvents(enable bool) error {
 	return remote.DomainEvents("Log", enable)
 }
 
-// DebuggerEvents enables DebugLog events listening.
+// DebuggerEvents enables Debugger events listening.
+// When enabled, you can receive events about JavaScript execution, including:
+// - Script parsing
+// - Breakpoint hits
+// - Exception throws
+//
+// Example:
+//
+//	debugger.DebuggerEvents(true)
+//	debugger.CallbackEvent("Debugger.paused", func(params Params) {
+//	    fmt.Println("Execution paused at breakpoint")
+//	})
 func (remote *RemoteDebugger) DebuggerEvents(enable bool) error {
 	return remote.DomainEvents("Debugger", enable)
 }

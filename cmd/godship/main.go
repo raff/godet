@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-type mmap = map[string]interface{}
+type mmap = map[string]any
 
 func timestamp() string {
 	return time.Now().Format(time.RFC3339)
@@ -33,11 +33,11 @@ func unquote(s string) string {
 	return s
 }
 
-func printJson(v interface{}) {
+func printJson(v any) {
 	fmt.Println(simplejson.MustDumpString(v, simplejson.Indent("  ")))
 }
 
-func parseValue(v string) (interface{}, error) {
+func parseValue(v string) (any, error) {
 	switch {
 	case strings.HasPrefix(v, "{") || strings.HasPrefix(v, "["):
 		j, err := simplejson.LoadString(v)
@@ -142,11 +142,14 @@ func chromeApp() (chromeapp string) {
 			chromeapp += " --headless"
 		}
 
-		chromeapp += " --remote-debugging-port=9222 --hide-scrollbars --wbsi --disable-extensions --disable-gpu about:blank"
+		temp := os.TempDir()
+		chromeapp += " --remote-debugging-port=9222 --user-data-dir=" + temp + " --hide-scrollbars --bwsi --disable-extensions --disable-gpu about:blank"
 	}
 
 	return
 }
+
+var interrupted bool
 
 func main() {
 	chromeapp := chromeApp()
@@ -249,18 +252,19 @@ func main() {
 			resp["mimeType"].(string))
 	})
 
-	var interrupted bool
-
 	commander := &cmd.Cmd{
 		HistoryFile: ".godship_history",
 		EnableShell: true,
-		Interrupt:   func(sig os.Signal) bool { interrupted = true; return false },
+		Interrupt: func(sig os.Signal) bool {
+			interrupted = true
+			return false
+		},
 	}
 
 	commander.Init(controlflow.Plugin, json.Plugin)
 	commander.SetVar("print", true)
 
-	setResult := func(v interface{}) {
+	setResult := func(v any) {
 		commander.SetVar("result", json.StringJson(v, true))
 		json.PrintJson(v)
 	}
@@ -357,11 +361,25 @@ func main() {
 
 	commander.Add(cmd.Command{
 		"query",
-		`query selector`,
+		`query [-all] selector`,
 		func(line string) (stop bool) {
+			all := false
+			if strings.HasPrefix(line, "-all ") {
+				line = strings.TrimPrefix(line, "-all ")
+				all = true
+			}
+
 			id := documentNode(remote, *verbose)
 
-			res, err := remote.QuerySelector(id, line)
+			var res mmap
+			var err error
+
+			if all {
+				res, err = remote.QuerySelectorAll(id, line)
+			} else {
+				res, err = remote.QuerySelector(id, line)
+			}
+
 			if err != nil {
 				setResult(err)
 				return
@@ -372,8 +390,26 @@ func main() {
 				return
 			}
 
-			id = int(res["nodeId"].(float64))
-			res, err = remote.ResolveNode(id)
+			if res["nodeId"] != nil {
+				id = int(res["nodeId"].(float64))
+				res, err = remote.ResolveNode(id)
+
+				res = map[string]any{
+					fmt.Sprintf("%d", id): res,
+				}
+			} else if res["nodeIds"] != nil {
+				nodeIds := res["nodeIds"].([]any)
+				res = map[string]any{}
+
+				for i, id := range nodeIds {
+					node, err := remote.ResolveNode(int(id.(float64)))
+					if err != nil {
+						break
+					}
+
+					res[fmt.Sprintf("%d", i)] = node
+				}
+			}
 			if err != nil {
 				setResult(err)
 				return
